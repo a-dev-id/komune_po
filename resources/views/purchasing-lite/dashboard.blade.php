@@ -3,6 +3,83 @@
 @section('title', 'Dashboard - Purchasing Lite')
 
 @section('content')
+@php
+$userRole = strtolower((string) ($user->role ?? $user->role_name ?? ''));
+$normalizedRole = str_replace(['-', '_'], ' ', trim($userRole));
+
+$canCreatePr =
+$normalizedRole === 'admin'
+|| $normalizedRole === 'requester'
+|| str_contains($normalizedRole, 'requester')
+|| in_array($normalizedRole, [
+'it',
+'housekeeping',
+'housekeeping & garden',
+'sales',
+'sales & marketing',
+'spa',
+'essence spa',
+], true);
+
+$formatStatus = function ($status) {
+return ucwords(str_replace('_', ' ', (string) $status));
+};
+
+$formatDate = function ($date) {
+if (! $date) {
+return '-';
+}
+
+try {
+return \Carbon\Carbon::parse($date)->format('d M Y');
+} catch (\Throwable $e) {
+return '-';
+}
+};
+
+$statusBadgeClass = function ($status) {
+$status = strtolower((string) $status);
+
+return match ($status) {
+'draft' => 'border-slate-400 bg-slate-100 text-slate-800',
+'submitted_to_purchasing' => 'border-blue-500 bg-blue-50 text-blue-900',
+'revision_to_requester_from_purchasing',
+'revision_from_purchasing' => 'border-orange-500 bg-orange-50 text-orange-900',
+'submitted_to_cost_control' => 'border-purple-500 bg-purple-50 text-purple-900',
+'submitted_to_gm' => 'border-indigo-500 bg-indigo-50 text-indigo-900',
+'submitted_to_owner' => 'border-cyan-500 bg-cyan-50 text-cyan-900',
+'submitted_to_financial_controller' => 'border-violet-500 bg-violet-50 text-violet-900',
+'on_progress' => 'border-blue-600 bg-blue-100 text-blue-950',
+'waiting_payment' => 'border-yellow-500 bg-yellow-50 text-yellow-900',
+'paid_to_vendor' => 'border-green-600 bg-green-50 text-green-900',
+'on_shipping',
+'on_delivery' => 'border-sky-500 bg-sky-50 text-sky-900',
+'received' => 'border-teal-500 bg-teal-50 text-teal-900',
+'handed_over_to_requester',
+'completed',
+'done' => 'border-emerald-600 bg-emerald-50 text-emerald-900',
+'rejected',
+'cancelled' => 'border-red-600 bg-red-50 text-red-900',
+default => 'border-slate-400 bg-white text-slate-800',
+};
+};
+
+$stepBadgeClass = function ($step) {
+$step = strtolower((string) $step);
+
+return match ($step) {
+'requester' => 'border-slate-400 bg-slate-100 text-slate-800',
+'purchasing' => 'border-blue-500 bg-blue-50 text-blue-900',
+'cost_control' => 'border-purple-500 bg-purple-50 text-purple-900',
+'gm' => 'border-indigo-500 bg-indigo-50 text-indigo-900',
+'owner' => 'border-cyan-500 bg-cyan-50 text-cyan-900',
+'financial_controller' => 'border-violet-500 bg-violet-50 text-violet-900',
+'completed' => 'border-emerald-600 bg-emerald-50 text-emerald-900',
+default => 'border-slate-400 bg-white text-slate-800',
+};
+};
+@endphp
+
 <section class="mb-6 border border-slate-300 bg-white p-6 shadow-sm">
     <div class="flex items-center justify-between gap-4">
         <div>
@@ -15,43 +92,17 @@
             </p>
         </div>
 
-        @if (($user->role ?? '') === 'requester' || ($user->role ?? '') === 'admin')
-        <a href="{{ route('purchasing-lite.purchase-requests.create') }}" class="inline-flex h-10 items-center justify-center bg-slate-950 px-6 text-sm font-bold text-white transition hover:bg-slate-800">
-            + Create New PR
-        </a>
-        @endif
-    </div>
-</section>
+        <div class="flex items-center gap-3">
+            <a href="{{ route('purchasing-lite.purchase-requests.meeting-list') }}" class="inline-flex h-10 items-center justify-center border border-slate-950 bg-white px-6 text-sm font-bold text-slate-950 transition hover:bg-slate-100">
+                PR List
+            </a>
 
-<section class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-    <div class="border border-slate-300 bg-white p-5 shadow-sm">
-        <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
-            Department
-        </p>
-
-        <p class="mt-3 text-2xl font-bold text-slate-950">
-            {{ $user->department_name ?? '-' }}
-        </p>
-    </div>
-
-    <div class="border border-slate-300 bg-white p-5 shadow-sm">
-        <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
-            Waiting Action
-        </p>
-
-        <p class="mt-3 text-2xl font-bold text-slate-950">
-            {{ $waitingAction ?? 0 }}
-        </p>
-    </div>
-
-    <div class="border border-slate-300 bg-white p-5 shadow-sm">
-        <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
-            Total PR
-        </p>
-
-        <p class="mt-3 text-2xl font-bold text-slate-950">
-            {{ $totalPr ?? 0 }}
-        </p>
+            @if ($canCreatePr)
+            <a href="{{ route('purchasing-lite.purchase-requests.create') }}" class="inline-flex h-10 items-center justify-center bg-slate-950 px-6 text-sm font-bold text-white transition hover:bg-slate-800">
+                + Create New PR
+            </a>
+            @endif
+        </div>
     </div>
 </section>
 
@@ -67,7 +118,7 @@
     </div>
 
     <div class="overflow-x-auto">
-        <table class="min-w-full border-collapse text-sm">
+        <table class="border-collapse text-sm" style="min-width: 1500px;">
             <thead>
                 <tr class="bg-slate-100">
                     <th class="w-16 border border-slate-300 px-4 py-3 text-center font-bold text-slate-800">
@@ -98,12 +149,20 @@
                         Items
                     </th>
 
-                    <th class="w-40 border border-slate-300 px-4 py-3 text-center font-bold text-slate-800">
+                    <th class="w-48 border border-slate-300 px-4 py-3 text-center font-bold text-slate-800">
                         Status
                     </th>
 
                     <th class="w-44 border border-slate-300 px-4 py-3 text-center font-bold text-slate-800">
                         Current Step
+                    </th>
+
+                    <th class="w-40 border border-slate-300 px-4 py-3 text-center font-bold text-slate-800">
+                        Received Date
+                    </th>
+
+                    <th class="w-40 border border-slate-300 px-4 py-3 text-center font-bold text-slate-800">
+                        Hand Over Date
                     </th>
 
                     <th class="w-36 border border-slate-300 px-4 py-3 text-center font-bold text-slate-800">
@@ -114,7 +173,31 @@
 
             <tbody>
                 @forelse ($purchaseRequests ?? [] as $purchaseRequest)
-                <tr class="hover:bg-slate-50">
+                @php
+                $status = strtolower((string) ($purchaseRequest->status ?? ''));
+                $currentStep = strtolower((string) ($purchaseRequest->current_step ?? ''));
+
+                $isPurchasingUser = in_array($normalizedRole, ['purchasing', 'admin'], true);
+
+                $needsPurchasingFollowUp =
+                $currentStep === 'purchasing'
+                && in_array($status, [
+                'paid_to_vendor',
+                'on_shipping',
+                'on_delivery',
+                'received',
+                ], true);
+
+                $isCompletedPr =
+                in_array($status, [
+                'handed_over_to_requester',
+                'completed',
+                'done',
+                ], true)
+                || $currentStep === 'completed';
+                @endphp
+
+                <tr class="{{ $isCompletedPr ? 'bg-emerald-50/40' : 'hover:bg-slate-50' }}">
                     <td class="border border-slate-300 px-4 py-3 text-center font-bold text-slate-700">
                         {{ $loop->iteration }}
                     </td>
@@ -136,7 +219,7 @@
                     </td>
 
                     <td class="border border-slate-300 px-4 py-3 text-center text-slate-800">
-                        {{ $purchaseRequest->date_needed ? $purchaseRequest->date_needed->format('d M Y') : '-' }}
+                        {{ $formatDate($purchaseRequest->date_needed ?? null) }}
                     </td>
 
                     <td class="border border-slate-300 px-4 py-3 text-center text-slate-800">
@@ -144,17 +227,31 @@
                     </td>
 
                     <td class="border border-slate-300 px-4 py-3 text-center">
-                        <span class="inline-flex border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-bold uppercase text-slate-700">
-                            {{ str_replace('_', ' ', $purchaseRequest->status) }}
+                        <span class="inline-flex min-w-[150px] items-center justify-center border px-3 py-2 text-xs font-bold uppercase leading-tight {{ $statusBadgeClass($purchaseRequest->status) }}">
+                            {{ $formatStatus($purchaseRequest->status) }}
                         </span>
                     </td>
 
-                    <td class="border border-slate-300 px-4 py-3 text-center text-slate-800">
-                        {{ str_replace('_', ' ', $purchaseRequest->current_step) }}
+                    <td class="border border-slate-300 px-4 py-3 text-center">
+                        <span class="inline-flex min-w-[130px] items-center justify-center border px-3 py-2 text-xs font-bold uppercase leading-tight {{ $stepBadgeClass($purchaseRequest->current_step) }}">
+                            {{ $formatStatus($purchaseRequest->current_step) }}
+                        </span>
+                    </td>
+
+                    <td class="border border-slate-300 px-4 py-3 text-center font-bold text-slate-800">
+                        {{ $formatDate($purchaseRequest->received_date ?? $purchaseRequest->received_at ?? null) }}
+                    </td>
+
+                    <td class="border border-slate-300 px-4 py-3 text-center font-bold text-slate-800">
+                        {{ $formatDate($purchaseRequest->handover_date ?? $purchaseRequest->handed_over_at ?? null) }}
                     </td>
 
                     <td class="border border-slate-300 px-4 py-3 text-center">
-                        @if (($user->role ?? '') === 'purchasing' || ($user->role ?? '') === 'admin')
+                        @if ($isPurchasingUser && $needsPurchasingFollowUp)
+                        <a href="{{ route('purchasing-lite.purchase-requests.show', $purchaseRequest) }}" class="inline-flex h-9 items-center justify-center bg-green-700 px-4 text-xs font-bold text-white transition hover:bg-green-800">
+                            Follow Up
+                        </a>
+                        @elseif ($isPurchasingUser && ! $isCompletedPr)
                         <a href="{{ route('purchasing-lite.purchase-requests.vendors', $purchaseRequest) }}" class="inline-flex h-9 items-center justify-center border border-slate-950 bg-white px-4 text-xs font-bold text-slate-950 transition hover:bg-slate-100">
                             Vendors
                         </a>
@@ -167,7 +264,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="10" class="border border-slate-300 px-4 py-6 text-center text-base text-slate-500">
+                    <td colspan="12" class="border border-slate-300 px-4 py-6 text-center text-base text-slate-500">
                         No purchase request data yet.
                     </td>
                 </tr>

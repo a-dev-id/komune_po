@@ -37,6 +37,14 @@ class PurchaseRequest extends Model
 
         'received_by_name',
         'received_date',
+        'received_at',
+        'received_remarks',
+
+        'handover_date',
+        'handed_over_at',
+        'handover_remarks',
+
+        'completed_at',
 
         'submitted_at',
         'current_status_at',
@@ -44,10 +52,20 @@ class PurchaseRequest extends Model
 
     protected $casts = [
         'date_needed' => 'date',
+
         'hold_until' => 'datetime',
         'hold_expired_at' => 'datetime',
+
         'rejected_at' => 'datetime',
+
         'received_date' => 'date',
+        'received_at' => 'datetime',
+
+        'handover_date' => 'date',
+        'handed_over_at' => 'datetime',
+
+        'completed_at' => 'datetime',
+
         'submitted_at' => 'datetime',
         'current_status_at' => 'datetime',
     ];

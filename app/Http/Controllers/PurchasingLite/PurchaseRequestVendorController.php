@@ -8,6 +8,7 @@ use App\Models\PurchaseRequestLog;
 use App\Models\PurchaseRequestVendorOffer;
 use App\Models\PurchaseRequestVendorOfferItem;
 use App\Models\Vendor;
+use App\Services\PurchasingLite\PurchasingLiteEmailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -21,20 +22,21 @@ class PurchaseRequestVendorController extends Controller
         }
 
         $user = Auth::user();
-        $role = strtolower((string) ($user->role ?? ''));
+        $role = $this->normalizedUserRole($user);
 
         if (! in_array($role, ['purchasing', 'admin'], true)) {
             return redirect('/purchasing-lite/dashboard')
                 ->with('error', 'Only Purchasing can manage vendor offers.');
         }
 
-        if ($purchaseRequest->current_step !== 'purchasing') {
+        if ($this->normalizedStep($purchaseRequest->current_step) !== 'purchasing') {
             return redirect('/purchasing-lite/dashboard')
                 ->with('error', 'This purchase request is not with Purchasing.');
         }
 
         $purchaseRequest->load([
             'items',
+            'logs.user',
             'vendorOffers.vendor',
             'vendorOffers.offerItems.purchaseRequestItem',
         ]);
@@ -70,14 +72,14 @@ class PurchaseRequestVendorController extends Controller
         }
 
         $user = Auth::user();
-        $role = strtolower((string) ($user->role ?? ''));
+        $role = $this->normalizedUserRole($user);
 
         if (! in_array($role, ['purchasing', 'admin'], true)) {
             return redirect('/purchasing-lite/dashboard')
                 ->with('error', 'Only Purchasing can save vendor bids.');
         }
 
-        if ($purchaseRequest->current_step !== 'purchasing') {
+        if ($this->normalizedStep($purchaseRequest->current_step) !== 'purchasing') {
             return redirect('/purchasing-lite/dashboard')
                 ->with('error', 'This purchase request is not with Purchasing.');
         }
@@ -93,43 +95,38 @@ class PurchaseRequestVendorController extends Controller
         }
 
         $validated = $request->validate([
-            'bids' => ['required', 'array'],
-            'bids.*' => ['required', 'array'],
+            'items' => ['nullable', 'array'],
+            'items.*.quantity' => ['nullable', 'string', 'max:100'],
+            'items.*.unit' => ['nullable', 'string', 'max:50'],
+
+            'bids' => ['nullable', 'array'],
+            'bids.*' => ['nullable', 'array'],
             'bids.*.*.vendor_name' => ['nullable', 'string', 'max:191'],
             'bids.*.*.unit_price' => ['nullable', 'string', 'max:100'],
         ]);
 
+        $itemUpdates = $validated['items'] ?? [];
         $bids = $validated['bids'] ?? [];
-        $errors = [];
-
-        foreach ($purchaseRequest->items as $item) {
-            for ($bidNumber = 1; $bidNumber <= 3; $bidNumber++) {
-                $vendorName = trim((string) ($bids[$item->id][$bidNumber]['vendor_name'] ?? ''));
-                $unitPriceRaw = trim((string) ($bids[$item->id][$bidNumber]['unit_price'] ?? ''));
-
-                if ($vendorName === '') {
-                    $errors[] = 'Please input Bid ' . $bidNumber . ' vendor for item: ' . $item->item_name;
-                }
-
-                if ($unitPriceRaw === '') {
-                    $errors[] = 'Please input Bid ' . $bidNumber . ' price for item: ' . $item->item_name;
-                }
-
-                if ($unitPriceRaw !== '' && $this->parseMoney($unitPriceRaw) <= 0) {
-                    $errors[] = 'Bid ' . $bidNumber . ' price must be more than 0 for item: ' . $item->item_name;
-                }
-            }
-        }
-
-        if (! empty($errors)) {
-            return back()
-                ->withErrors($errors)
-                ->withInput();
-        }
 
         DB::beginTransaction();
 
         try {
+            foreach ($purchaseRequest->items as $item) {
+                $itemUpdate = $itemUpdates[$item->id] ?? [];
+
+                $quantityRaw = trim((string) ($itemUpdate['quantity'] ?? $item->quantity));
+                $unitRaw = trim((string) ($itemUpdate['unit'] ?? $item->unit));
+
+                $quantity = $this->parseMoney($quantityRaw);
+
+                $item->update([
+                    'quantity' => $quantity > 0 ? $quantity : 1,
+                    'unit' => $unitRaw !== '' ? $unitRaw : null,
+                ]);
+            }
+
+            $purchaseRequest->load('items');
+
             $existingOffers = $purchaseRequest->vendorOffers()
                 ->with('offerItems')
                 ->get();
@@ -144,9 +141,23 @@ class PurchaseRequestVendorController extends Controller
             foreach ($purchaseRequest->items as $item) {
                 for ($bidNumber = 1; $bidNumber <= 3; $bidNumber++) {
                     $vendorName = trim((string) ($bids[$item->id][$bidNumber]['vendor_name'] ?? ''));
-                    $unitPrice = $this->parseMoney((string) ($bids[$item->id][$bidNumber]['unit_price'] ?? ''));
+                    $unitPriceRaw = trim((string) ($bids[$item->id][$bidNumber]['unit_price'] ?? ''));
+
+                    if ($vendorName === '' || $unitPriceRaw === '') {
+                        continue;
+                    }
+
+                    $unitPrice = $this->parseMoney($unitPriceRaw);
+
+                    if ($unitPrice <= 0) {
+                        continue;
+                    }
 
                     $normalizedName = Vendor::normalizeName($vendorName);
+
+                    if ($normalizedName === '') {
+                        continue;
+                    }
 
                     if (! isset($groupedBids[$normalizedName])) {
                         $groupedBids[$normalizedName] = [
@@ -230,7 +241,9 @@ class PurchaseRequestVendorController extends Controller
                 'to_status' => $purchaseRequest->status,
                 'from_step' => $purchaseRequest->current_step,
                 'to_step' => $purchaseRequest->current_step,
-                'remarks' => 'Vendor bids saved by Purchasing.',
+                'remarks' => empty($groupedBids)
+                    ? 'Vendor bids, item quantity, and item unit saved by Purchasing. No vendor bid was entered.'
+                    : 'Vendor bids, item quantity, and item unit saved by Purchasing.',
                 'acted_at' => now(),
             ]);
 
@@ -257,24 +270,16 @@ class PurchaseRequestVendorController extends Controller
         }
 
         $user = Auth::user();
-        $role = strtolower((string) ($user->role ?? ''));
+        $role = $this->normalizedUserRole($user);
 
         if (! in_array($role, ['purchasing', 'admin'], true)) {
             return redirect('/purchasing-lite/dashboard')
                 ->with('error', 'Only Purchasing can send this PR to Cost Control.');
         }
 
-        if ($purchaseRequest->current_step !== 'purchasing') {
+        if ($this->normalizedStep($purchaseRequest->current_step) !== 'purchasing') {
             return redirect('/purchasing-lite/dashboard')
                 ->with('error', 'This purchase request is not with Purchasing.');
-        }
-
-        $hasVendorOffers = $purchaseRequest->vendorOffers()->exists();
-
-        if (! $hasVendorOffers) {
-            return redirect()
-                ->route('purchasing-lite.purchase-requests.vendors', $purchaseRequest)
-                ->with('error', 'Please save vendor bids first before sending to Cost Control.');
         }
 
         DB::beginTransaction();
@@ -286,6 +291,7 @@ class PurchaseRequestVendorController extends Controller
             $purchaseRequest->update([
                 'status' => 'submitted_to_cost_control',
                 'current_step' => 'cost_control',
+                'current_status_at' => now(),
             ]);
 
             PurchaseRequestLog::create([
@@ -297,11 +303,22 @@ class PurchaseRequestVendorController extends Controller
                 'to_status' => 'submitted_to_cost_control',
                 'from_step' => $fromStep,
                 'to_step' => 'cost_control',
-                'remarks' => 'PR sent to Cost Control after vendor bids were saved.',
+                'remarks' => 'PR sent to Cost Control. Vendor comparison will be validated by Cost Control.',
                 'acted_at' => now(),
             ]);
 
             DB::commit();
+
+            app(PurchasingLiteEmailService::class)->sendToRoles(
+                purchaseRequest: $purchaseRequest,
+                roles: ['cost_control'],
+                subject: 'PR Sent to Cost Control - ' . $purchaseRequest->pr_number,
+                title: 'PR Needs Cost Control Review',
+                messageText: 'Purchasing has submitted vendor bids. Please review and select the vendor.',
+                buttonLabel: 'Select Vendor',
+                buttonUrl: route('purchasing-lite.purchase-requests.cost-control.show', $purchaseRequest),
+                remarks: 'PR sent to Cost Control. Vendor comparison will be validated by Cost Control.'
+            );
 
             return redirect()
                 ->route('purchasing-lite.dashboard')
@@ -322,14 +339,14 @@ class PurchaseRequestVendorController extends Controller
         }
 
         $user = Auth::user();
-        $role = strtolower((string) ($user->role ?? ''));
+        $role = $this->normalizedUserRole($user);
 
         if (! in_array($role, ['purchasing', 'admin'], true)) {
             return redirect('/purchasing-lite/dashboard')
                 ->with('error', 'Only Purchasing can send this PR back to Requester.');
         }
 
-        if ($purchaseRequest->current_step !== 'purchasing') {
+        if ($this->normalizedStep($purchaseRequest->current_step) !== 'purchasing') {
             return redirect('/purchasing-lite/dashboard')
                 ->with('error', 'This purchase request is not with Purchasing.');
         }
@@ -347,6 +364,7 @@ class PurchaseRequestVendorController extends Controller
             $purchaseRequest->update([
                 'status' => 'revision_to_requester_from_purchasing',
                 'current_step' => 'requester',
+                'current_status_at' => now(),
             ]);
 
             PurchaseRequestLog::create([
@@ -363,6 +381,16 @@ class PurchaseRequestVendorController extends Controller
             ]);
 
             DB::commit();
+
+            app(PurchasingLiteEmailService::class)->sendToRequester(
+                purchaseRequest: $purchaseRequest,
+                subject: 'PR Sent Back for Revision - ' . $purchaseRequest->pr_number,
+                title: 'PR Sent Back by Purchasing',
+                messageText: 'Purchasing has sent your purchase request back for revision.',
+                buttonLabel: 'Open PR',
+                buttonUrl: route('purchasing-lite.purchase-requests.show', $purchaseRequest),
+                remarks: $validated['remarks']
+            );
 
             return redirect()
                 ->route('purchasing-lite.dashboard')
@@ -383,14 +411,14 @@ class PurchaseRequestVendorController extends Controller
         }
 
         $user = Auth::user();
-        $role = strtolower((string) ($user->role ?? ''));
+        $role = $this->normalizedUserRole($user);
 
         if (! in_array($role, ['purchasing', 'admin'], true)) {
             return redirect('/purchasing-lite/dashboard')
                 ->with('error', 'Only Purchasing can reject this PR.');
         }
 
-        if ($purchaseRequest->current_step !== 'purchasing') {
+        if ($this->normalizedStep($purchaseRequest->current_step) !== 'purchasing') {
             return redirect('/purchasing-lite/dashboard')
                 ->with('error', 'This purchase request is not with Purchasing.');
         }
@@ -408,6 +436,7 @@ class PurchaseRequestVendorController extends Controller
             $purchaseRequest->update([
                 'status' => 'rejected',
                 'current_step' => 'requester',
+                'current_status_at' => now(),
             ]);
 
             PurchaseRequestLog::create([
@@ -424,6 +453,16 @@ class PurchaseRequestVendorController extends Controller
             ]);
 
             DB::commit();
+
+            app(PurchasingLiteEmailService::class)->sendToRequester(
+                purchaseRequest: $purchaseRequest,
+                subject: 'PR Rejected - ' . $purchaseRequest->pr_number,
+                title: 'PR Rejected by Purchasing',
+                messageText: 'Purchasing has rejected this purchase request.',
+                buttonLabel: 'Open PR',
+                buttonUrl: route('purchasing-lite.purchase-requests.show', $purchaseRequest),
+                remarks: $validated['remarks']
+            );
 
             return redirect()
                 ->route('purchasing-lite.dashboard')
@@ -591,5 +630,19 @@ class PurchaseRequestVendorController extends Controller
         }
 
         return (float) $value;
+    }
+
+    private function normalizedUserRole($user): string
+    {
+        $role = strtolower(trim((string) ($user->role ?? $user->role_name ?? '')));
+
+        return str_replace(['-', ' '], '_', $role);
+    }
+
+    private function normalizedStep(?string $step): string
+    {
+        $step = strtolower(trim((string) $step));
+
+        return str_replace(['-', ' '], '_', $step);
     }
 }

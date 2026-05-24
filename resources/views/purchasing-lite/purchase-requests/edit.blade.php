@@ -3,6 +3,43 @@
 @section('title', 'Edit ' . $purchaseRequest->pr_number . ' - Purchasing Lite')
 
 @section('content')
+@php
+$returnStatuses = [
+'revision_to_requester_from_purchasing',
+'revision_from_purchasing',
+];
+
+$latestPurchasingReturnLog = null;
+
+if (method_exists($purchaseRequest, 'logs')) {
+$latestPurchasingReturnLog = $purchaseRequest->logs()
+->where(function ($query) {
+$query->where('action', 'send_back_to_requester')
+->orWhere('action', 'returned_to_requester')
+->orWhere('action', 'revision_to_requester_from_purchasing')
+->orWhere('to_status', 'revision_to_requester_from_purchasing')
+->orWhere('to_status', 'revision_from_purchasing');
+})
+->latest('acted_at')
+->latest('created_at')
+->first();
+}
+
+$purchasingReturnRemark =
+$latestPurchasingReturnLog->remarks
+?? $latestPurchasingReturnLog->remark
+?? $latestPurchasingReturnLog->notes
+?? $purchaseRequest->purchasing_remarks
+?? $purchaseRequest->remarks
+?? null;
+
+$showPurchasingReturnRemark =
+in_array((string) $purchaseRequest->status, $returnStatuses, true)
+&& filled($purchasingReturnRemark);
+
+$isReturnedPr = in_array((string) $purchaseRequest->status, $returnStatuses, true);
+@endphp
+
 <form id="edit-pr-form" method="POST" action="{{ route('purchasing-lite.purchase-requests.update', $purchaseRequest) }}" enctype="multipart/form-data" autocomplete="off">
     @csrf
     @method('PUT')
@@ -11,7 +48,7 @@
         <div class="flex items-center justify-between gap-4">
             <div>
                 <h2 class="text-xl font-bold text-slate-950">
-                    Edit Draft Purchase Request
+                    {{ $isReturnedPr ? 'Edit Returned Purchase Request' : 'Edit Draft Purchase Request' }}
                 </h2>
 
                 <p class="mt-1 text-base text-slate-600">
@@ -34,6 +71,44 @@
             <li>{{ $error }}</li>
             @endforeach
         </ul>
+    </section>
+    @endif
+
+    @if ($showPurchasingReturnRemark)
+    <section class="mb-6 border border-red-300 bg-white shadow-sm">
+        <div class="border-b border-red-300 bg-red-50 px-5 py-4">
+            <h3 class="text-lg font-bold text-red-800">
+                Purchasing Return Remark
+            </h3>
+        </div>
+
+        <div class="p-5">
+            <p class="text-sm font-bold uppercase tracking-wide text-red-700">
+                Please revise this PR based on the note from Purchasing
+            </p>
+
+            <div class="mt-3 border border-red-300 bg-red-50 p-4">
+                <p class="whitespace-pre-line text-base font-bold text-red-900">
+                    {{ $purchasingReturnRemark }}
+                </p>
+            </div>
+
+            @if ($latestPurchasingReturnLog)
+            <p class="mt-3 text-sm text-slate-600">
+                Sent back by
+                <span class="font-bold text-slate-900">
+                    {{ $latestPurchasingReturnLog->user->name ?? 'Purchasing' }}
+                </span>
+
+                @if (! empty($latestPurchasingReturnLog->acted_at))
+                on
+                <span class="font-bold text-slate-900">
+                    {{ \Carbon\Carbon::parse($latestPurchasingReturnLog->acted_at)->format('d M Y H:i') }}
+                </span>
+                @endif
+            </p>
+            @endif
+        </div>
     </section>
     @endif
 
@@ -79,7 +154,7 @@
 
             <div class="md:col-span-3">
                 <label class="mb-2 block text-sm font-bold text-slate-700">
-                    Remarks
+                    Requester Remarks
                 </label>
 
                 <textarea name="requester_remarks" rows="3" autocomplete="off" spellcheck="false" class="w-full border border-slate-400 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100">{{ old('requester_remarks', $purchaseRequest->requester_remarks) }}</textarea>
