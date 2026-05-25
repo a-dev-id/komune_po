@@ -1,6 +1,6 @@
 @extends('layouts.purchasing-lite')
 
-@section('title', 'PR Meeting List - Purchasing Lite')
+@section('title', 'All PR List - Purchasing Lite')
 
 @section('content')
 @php
@@ -152,11 +152,11 @@ return $purchaseRequest->financial_controller_remarks
     <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
             <h2 class="text-xl font-bold text-slate-950">
-                PR Meeting List
+                All PR List
             </h2>
 
             <p class="mt-1 text-base text-slate-600">
-                View all purchase requests for weekly PR meeting discussion.
+                View all purchase requests for PR discussion.
             </p>
         </div>
 

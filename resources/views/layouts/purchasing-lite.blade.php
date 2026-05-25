@@ -18,7 +18,7 @@
     $currentUser = auth()->user();
     @endphp
 
-    <div class="min-h-screen">
+    <div class="flex min-h-screen flex-col">
         <header class="border-b border-slate-300 bg-white">
             <div class="flex items-center justify-between px-6 py-4">
                 <a href="/purchasing-lite/dashboard" class="text-inherit no-underline">
@@ -27,7 +27,7 @@
                     </h1>
 
                     <p class="mt-1 text-sm text-slate-600">
-                        Simple Excel-style purchasing system
+                        Simple purchasing system for older people (Like Pak Yoga)
                     </p>
                 </a>
 
@@ -51,7 +51,7 @@
             </div>
         </header>
 
-        <main class="p-6">
+        <main class="flex-1 p-6">
             @if (session('success'))
             <div class="mb-6 border border-green-300 bg-green-50 px-5 py-4 text-base font-medium text-green-800">
                 {{ session('success') }}
@@ -66,6 +66,12 @@
 
             @yield('content')
         </main>
+
+        <footer class="border-t border-slate-300 bg-white px-6 py-4 text-center text-sm font-medium text-slate-600">
+            <span class="mx-1 text-red-600" aria-hidden="true">&hearts;</span>
+            Made by Angga with a lot of pressure and too many tasks
+            <span class="mx-1 text-red-600" aria-hidden="true">&hearts;</span>
+        </footer>
     </div>
 
     @stack('scripts')
