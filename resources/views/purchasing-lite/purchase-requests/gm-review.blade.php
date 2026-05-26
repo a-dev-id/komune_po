@@ -19,6 +19,20 @@ $statusLabel = ucwords(str_replace('_', ' ', (string) $purchaseRequest->status))
 $currentStepLabel = ucwords(str_replace('_', ' ', (string) $purchaseRequest->current_step));
 $prNumber = $purchaseRequest->pr_number ?? $purchaseRequest->request_number ?? '-';
 
+$priority = strtolower((string) ($purchaseRequest->priority ?? 'regular'));
+
+$priorityLabel = match ($priority) {
+'urgent' => 'Urgent',
+'important' => 'Important',
+default => 'Regular',
+};
+
+$priorityBadgeClass = match ($priority) {
+'urgent' => 'border-red-600 bg-red-50 text-red-900',
+'important' => 'border-yellow-500 bg-yellow-50 text-yellow-900',
+default => 'border-slate-400 bg-slate-100 text-slate-800',
+};
+
 $itemsCount = $purchaseRequest->items->count();
 $canSelectItems = $itemsCount > 1;
 
@@ -198,9 +212,11 @@ if ($itemsCount < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($pur
                     GM Review
                 </h2>
 
-                <p class="mt-1 text-base text-slate-600">
-                    {{ $prNumber }} - {{ $purchaseRequest->title }}
-                </p>
+                <div class="mt-1 flex flex-wrap items-center gap-3">
+                    <p class="text-base text-slate-600">
+                        {{ $prNumber }} - {{ $purchaseRequest->title }}
+                    </p>
+                </div>
             </div>
 
             <a href="/purchasing-lite/dashboard" class="inline-flex h-10 items-center justify-center border border-slate-300 bg-white px-6 text-sm font-bold text-slate-800 transition hover:bg-slate-50">
@@ -240,7 +256,7 @@ if ($itemsCount < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($pur
             </h3>
         </div>
 
-        <div class="grid grid-cols-1 gap-4 p-5 md:grid-cols-3">
+        <div class="grid grid-cols-1 gap-4 p-5 md:grid-cols-4">
             <div>
                 <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
                     Requester Name
@@ -273,6 +289,18 @@ if ($itemsCount < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($pur
 
             <div>
                 <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
+                    PR Priority
+                </p>
+
+                <div class="mt-2">
+                    <span class="inline-flex min-w-[105px] items-center justify-center border px-3 py-2 text-xs font-bold uppercase leading-tight {{ $priorityBadgeClass }}">
+                        {{ $priorityLabel }}
+                    </span>
+                </div>
+            </div>
+
+            <div>
+                <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
                     Status
                 </p>
 
@@ -301,7 +329,7 @@ if ($itemsCount < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($pur
                 </p>
             </div>
 
-            <div class="md:col-span-3">
+            <div class="md:col-span-4">
                 <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
                     Requester Remarks
                 </p>
@@ -312,7 +340,7 @@ if ($itemsCount < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($pur
             </div>
 
             @if ($showGmSplitRemark)
-            <div class="md:col-span-3">
+            <div class="md:col-span-4">
                 <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
                     GM Split Remarks
                 </p>
@@ -493,6 +521,11 @@ if ($itemsCount < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($pur
             </table>
         </div>
 
+        <form id="approve-form" method="POST" action="{{ $approveRoute }}" onsubmit="return validateApprove();">
+            @csrf
+            <input type="hidden" name="remarks" value="">
+        </form>
+
         <div class="flex flex-col justify-end gap-3 border-t border-slate-300 p-5 md:flex-row">
             <button type="button" data-open-modal="return-cost-control-modal" class="inline-flex h-10 items-center justify-center border border-blue-700 bg-white px-6 text-sm font-bold text-blue-800 transition hover:bg-blue-50">
                 Return to Cost Control
@@ -503,7 +536,7 @@ if ($itemsCount < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($pur
             </button>
 
             @if ($allItemsHaveSelectedVendor)
-            <button type="button" data-open-modal="approve-modal" class="inline-flex h-10 items-center justify-center bg-green-700 px-6 text-sm font-bold text-white transition hover:bg-green-800">
+            <button type="submit" form="approve-form" class="inline-flex h-10 items-center justify-center bg-green-700 px-6 text-sm font-bold text-white transition hover:bg-green-800">
                 Approve
             </button>
             @else
@@ -513,54 +546,6 @@ if ($itemsCount < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($pur
             @endif
         </div>
     </section>
-
-    <div id="approve-modal" class="fixed inset-0 z-[99999] hidden items-center justify-center bg-black/50 px-4">
-        <div class="w-full max-w-lg border border-slate-300 bg-white shadow-xl">
-            <div class="border-b border-slate-300 px-5 py-4">
-                <h3 class="text-lg font-bold text-slate-950">
-                    Approve PR
-                </h3>
-
-                @if ($canSelectItems)
-                <p class="mt-1 text-sm text-slate-600">
-                    Selected items will be approved and sent to Owner. Unticked items will be split into a new PR and stay in GM review.
-                </p>
-                @else
-                <p class="mt-1 text-sm text-slate-600">
-                    This will approve this PR and send it to Owner.
-                </p>
-                @endif
-            </div>
-
-            <form id="approve-form" method="POST" action="{{ $approveRoute }}" onsubmit="return validateApprove();">
-                @csrf
-
-                <div class="p-5">
-                    @if ($canSelectItems)
-                    <div class="mb-4 border border-blue-300 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-900">
-                        Untick the item row(s) you do not want to approve. If all items remain ticked, the full PR will be approved.
-                    </div>
-                    @endif
-
-                    <label class="mb-2 block text-sm font-bold text-slate-800">
-                        Remarks
-                    </label>
-
-                    <textarea name="remarks" rows="5" class="w-full border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100" placeholder="Optional remarks for Owner."></textarea>
-                </div>
-
-                <div class="flex justify-end gap-3 border-t border-slate-300 p-5">
-                    <button type="button" data-close-modal class="inline-flex h-10 items-center justify-center border border-slate-300 bg-white px-6 text-sm font-bold text-slate-800 transition hover:bg-slate-50">
-                        Cancel
-                    </button>
-
-                    <button type="submit" class="inline-flex h-10 items-center justify-center bg-green-700 px-6 text-sm font-bold text-white transition hover:bg-green-800">
-                        Approve
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
 
     <div id="return-cost-control-modal" class="fixed inset-0 z-[99999] hidden items-center justify-center bg-black/50 px-4">
         <div class="w-full max-w-lg border border-slate-300 bg-white shadow-xl">
@@ -641,7 +626,7 @@ if ($itemsCount < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($pur
 
     function validateApprove() {
         if (!gmCanSelectItems) {
-            return confirm('Approve this PR and send it to Owner?');
+            return true;
         }
 
         const checkboxes = Array.from(document.querySelectorAll('[data-approve-item-checkbox]'));
@@ -654,11 +639,7 @@ if ($itemsCount < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($pur
             return false;
         }
 
-        if (checked.length === checkboxes.length) {
-            return confirm('Approve all selected items and send this PR to Owner?');
-        }
-
-        return confirm('Approve selected items and split unticked items into a new PR?');
+        return true;
     }
 
     document.addEventListener('DOMContentLoaded', function () {

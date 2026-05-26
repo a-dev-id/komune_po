@@ -34,6 +34,20 @@ $latestCostControlReturnLog->remarks
 $showCostControlReturnRemark =
 in_array((string) $purchaseRequest->status, $costControlReturnStatuses, true)
 && filled($costControlReturnRemark);
+
+$priority = strtolower((string) ($purchaseRequest->priority ?? 'regular'));
+
+$priorityLabel = match ($priority) {
+'urgent' => 'Urgent',
+'important' => 'Important',
+default => 'Regular',
+};
+
+$priorityBadgeClass = match ($priority) {
+'urgent' => 'border-red-600 bg-red-50 text-red-900',
+'important' => 'border-yellow-500 bg-yellow-50 text-yellow-900',
+default => 'border-slate-400 bg-slate-100 text-slate-800',
+};
 @endphp
 
 <section class="mb-6 border border-slate-300 bg-white p-6 shadow-sm">
@@ -43,9 +57,11 @@ in_array((string) $purchaseRequest->status, $costControlReturnStatuses, true)
                 Vendor Comparison
             </h2>
 
-            <p class="mt-1 text-base text-slate-600">
-                {{ $purchaseRequest->pr_number }} - {{ $purchaseRequest->title }}
-            </p>
+            <div class="mt-1 flex flex-wrap items-center gap-3">
+                <p class="text-base text-slate-600">
+                    {{ $purchaseRequest->pr_number }} - {{ $purchaseRequest->title }}
+                </p>
+            </div>
         </div>
 
         <a href="/purchasing-lite/dashboard" class="inline-flex h-10 items-center justify-center border border-slate-300 bg-white px-6 text-sm font-bold text-slate-800 transition hover:bg-slate-50">
@@ -73,7 +89,7 @@ in_array((string) $purchaseRequest->status, $costControlReturnStatuses, true)
         </h3>
     </div>
 
-    <div class="grid grid-cols-1 gap-4 p-5 md:grid-cols-4">
+    <div class="grid grid-cols-1 gap-4 p-5 md:grid-cols-5">
         <div>
             <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
                 Requester
@@ -106,6 +122,18 @@ in_array((string) $purchaseRequest->status, $costControlReturnStatuses, true)
 
         <div>
             <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
+                PR Priority
+            </p>
+
+            <div class="mt-2">
+                <span class="inline-flex min-w-[105px] items-center justify-center border px-3 py-2 text-xs font-bold uppercase leading-tight {{ $priorityBadgeClass }}">
+                    {{ $priorityLabel }}
+                </span>
+            </div>
+        </div>
+
+        <div>
+            <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
                 Current Step
             </p>
 
@@ -114,7 +142,7 @@ in_array((string) $purchaseRequest->status, $costControlReturnStatuses, true)
             </p>
         </div>
 
-        <div class="md:col-span-4">
+        <div class="md:col-span-5">
             <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
                 Requester Remarks
             </p>
@@ -225,7 +253,7 @@ in_array((string) $purchaseRequest->status, $costControlReturnStatuses, true)
                             Vendor
                         </th>
 
-                        <th class="w-40 border border-slate-300 px-3 py-2 text-center font-bold text-slate-800">
+                        <th class="w-44 border border-slate-300 px-3 py-2 text-center font-bold text-slate-800">
                             Price / Unit
                         </th>
 
@@ -233,7 +261,7 @@ in_array((string) $purchaseRequest->status, $costControlReturnStatuses, true)
                             Vendor
                         </th>
 
-                        <th class="w-40 border border-slate-300 px-3 py-2 text-center font-bold text-slate-800">
+                        <th class="w-44 border border-slate-300 px-3 py-2 text-center font-bold text-slate-800">
                             Price / Unit
                         </th>
 
@@ -241,7 +269,7 @@ in_array((string) $purchaseRequest->status, $costControlReturnStatuses, true)
                             Vendor
                         </th>
 
-                        <th class="w-40 border border-slate-300 px-3 py-2 text-center font-bold text-slate-800">
+                        <th class="w-44 border border-slate-300 px-3 py-2 text-center font-bold text-slate-800">
                             Price / Unit
                         </th>
                     </tr>
@@ -302,7 +330,7 @@ in_array((string) $purchaseRequest->status, $costControlReturnStatuses, true)
                                 $savedUnitPrice = $savedBids[$item->id][$bidNumber]['unit_price'] ?? '';
 
                                 if ($savedUnitPrice !== '') {
-                                $savedUnitPrice = rtrim(rtrim(number_format((float) $savedUnitPrice, 2, '.', ''), '0'), '.');
+                                $savedUnitPrice = (string) (int) $savedUnitPrice;
                                 }
 
                                 $vendorNameValue = old('bids.' . $item->id . '.' . $bidNumber . '.vendor_name', $savedVendorName);
@@ -316,7 +344,7 @@ in_array((string) $purchaseRequest->status, $costControlReturnStatuses, true)
                                 </td>
 
                                 <td class="align-top border border-slate-300 p-0">
-                                    <input type="text" name="bids[{{ $item->id }}][{{ $bidNumber }}][unit_price]" value="{{ $unitPriceValue }}" inputmode="decimal" autocomplete="off" placeholder="0" class="h-11 w-full border-0 bg-white px-3 text-right text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-100">
+                                    <input type="text" name="bids[{{ $item->id }}][{{ $bidNumber }}][unit_price]" value="{{ $unitPriceValue }}" inputmode="numeric" autocomplete="off" placeholder="Rp 0" class="js-rupiah-input h-11 w-full border-0 bg-white px-3 text-right text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-100">
                                 </td>
                                 @endfor
                         </tr>
@@ -436,6 +464,7 @@ in_array((string) $purchaseRequest->status, $costControlReturnStatuses, true)
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const vendorSearchUrl = @json(route('purchasing-lite.vendors.search'));
+        const vendorBidsForm = document.getElementById('vendor-bids-form');
         const searchTimers = {};
 
         function closeAllVendorResults() {
@@ -447,6 +476,47 @@ in_array((string) $purchaseRequest->status, $costControlReturnStatuses, true)
             document.querySelectorAll('td.z-\\[9999\\]').forEach(function (td) {
                 td.classList.remove('z-[9999]');
             });
+        }
+
+        function onlyDigits(value) {
+            return String(value ?? '').replace(/[^\d]/g, '');
+        }
+
+        function formatRupiah(value) {
+            const digits = onlyDigits(value);
+
+            if (digits === '') {
+                return '';
+            }
+
+            return 'Rp ' + digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        }
+
+        function unformatRupiah(value) {
+            return onlyDigits(value);
+        }
+
+        function setupRupiahMasking() {
+            document.querySelectorAll('.js-rupiah-input').forEach(function (input) {
+                input.value = formatRupiah(input.value);
+
+                input.addEventListener('input', function () {
+                    input.value = formatRupiah(input.value);
+                    input.setSelectionRange(input.value.length, input.value.length);
+                });
+
+                input.addEventListener('blur', function () {
+                    input.value = formatRupiah(input.value);
+                });
+            });
+
+            if (vendorBidsForm) {
+                vendorBidsForm.addEventListener('submit', function () {
+                    document.querySelectorAll('.js-rupiah-input').forEach(function (input) {
+                        input.value = unformatRupiah(input.value);
+                    });
+                });
+            }
         }
 
         function escapeHtml(value) {
@@ -527,6 +597,8 @@ in_array((string) $purchaseRequest->status, $costControlReturnStatuses, true)
                 }, 250);
             });
         });
+
+        setupRupiahMasking();
 
         document.addEventListener('click', function (event) {
             if (! event.target.closest('.js-vendor-search') && ! event.target.closest('.js-vendor-results')) {

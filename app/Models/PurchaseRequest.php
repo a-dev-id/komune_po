@@ -15,6 +15,7 @@ class PurchaseRequest extends Model
         'requester_name',
         'department_name',
         'date_needed',
+        'priority',
         'status',
         'current_step',
 
@@ -107,6 +108,24 @@ class PurchaseRequest extends Model
     public function splitChildren(): HasMany
     {
         return $this->hasMany(PurchaseRequest::class, 'split_from_id');
+    }
+
+    public function getPriorityLabelAttribute(): string
+    {
+        return match ($this->priority) {
+            'urgent' => 'Urgent',
+            'important' => 'Important',
+            default => 'Regular',
+        };
+    }
+
+    public function getPriorityBadgeClassAttribute(): string
+    {
+        return match ($this->priority) {
+            'urgent' => 'border border-red-300 bg-red-100 px-3 py-1 text-xs font-bold text-red-800',
+            'important' => 'border border-yellow-300 bg-yellow-100 px-3 py-1 text-xs font-bold text-yellow-800',
+            default => 'border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-bold text-slate-800',
+        };
     }
 
     public function isDraft(): bool

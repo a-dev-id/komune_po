@@ -15,6 +15,20 @@ $formatQty = function ($value) {
 return rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.');
 };
 
+$priority = strtolower((string) ($purchaseRequest->priority ?? 'regular'));
+
+$priorityLabel = match ($priority) {
+'urgent' => 'Urgent',
+'important' => 'Important',
+default => 'Regular',
+};
+
+$priorityBadgeClass = match ($priority) {
+'urgent' => 'border-red-600 bg-red-50 text-red-900',
+'important' => 'border-yellow-500 bg-yellow-50 text-yellow-900',
+default => 'border-slate-400 bg-slate-100 text-slate-800',
+};
+
 $allItemsHaveSelectedVendor = true;
 
 if ($purchaseRequest->items->count() < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($purchaseRequest->items as $checkItem) {
@@ -73,9 +87,11 @@ if ($purchaseRequest->items->count() < 1) { $allItemsHaveSelectedVendor=false; }
                     Cost Control Review
                 </h2>
 
-                <p class="mt-1 text-base text-slate-600">
-                    {{ $prNumber }} - {{ $purchaseRequest->title }}
-                </p>
+                <div class="mt-1 flex flex-wrap items-center gap-3">
+                    <p class="text-base text-slate-600">
+                        {{ $prNumber }} - {{ $purchaseRequest->title }}
+                    </p>
+                </div>
             </div>
 
             <a href="/purchasing-lite/dashboard" class="inline-flex h-10 items-center justify-center border border-slate-300 bg-white px-6 text-sm font-bold text-slate-800 transition hover:bg-slate-50">
@@ -103,7 +119,7 @@ if ($purchaseRequest->items->count() < 1) { $allItemsHaveSelectedVendor=false; }
             </h3>
         </div>
 
-        <div class="grid grid-cols-1 gap-4 p-5 md:grid-cols-4">
+        <div class="grid grid-cols-1 gap-4 p-5 md:grid-cols-5">
             <div>
                 <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
                     Requester
@@ -136,6 +152,18 @@ if ($purchaseRequest->items->count() < 1) { $allItemsHaveSelectedVendor=false; }
 
             <div>
                 <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
+                    PR Priority
+                </p>
+
+                <div class="mt-2">
+                    <span class="inline-flex min-w-[105px] items-center justify-center border px-3 py-2 text-xs font-bold uppercase leading-tight {{ $priorityBadgeClass }}">
+                        {{ $priorityLabel }}
+                    </span>
+                </div>
+            </div>
+
+            <div>
+                <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
                     Status
                 </p>
 
@@ -144,7 +172,7 @@ if ($purchaseRequest->items->count() < 1) { $allItemsHaveSelectedVendor=false; }
                 </p>
             </div>
 
-            <div class="md:col-span-4">
+            <div class="md:col-span-5">
                 <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
                     Requester Remarks
                 </p>

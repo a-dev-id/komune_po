@@ -43,13 +43,13 @@
             </h3>
         </div>
 
-        <div class="grid grid-cols-1 gap-4 p-5 md:grid-cols-3">
+        <div class="grid grid-cols-1 gap-4 p-5 md:grid-cols-4">
             <div>
                 <label class="mb-2 block text-sm font-bold text-slate-700">
-                    Requester Name
+                    Requester Name <span class="text-red-600">*</span>
                 </label>
 
-                <input type="text" name="requester_name" value="{{ old('requester_name') }}" placeholder="Type requester name" autocomplete="off" spellcheck="false" class="h-11 w-full border border-slate-400 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100">
+                <input type="text" name="requester_name" value="{{ old('requester_name') }}" placeholder="Type requester name" autocomplete="off" spellcheck="false" required class="h-11 w-full border border-slate-400 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100">
             </div>
 
             <div>
@@ -62,21 +62,42 @@
 
             <div>
                 <label class="mb-2 block text-sm font-bold text-slate-700">
-                    Date Needed
+                    Date Needed <span class="text-red-600">*</span>
                 </label>
 
-                <input type="date" name="date_needed" value="{{ old('date_needed') }}" autocomplete="off" class="h-11 w-full border border-slate-400 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100">
+                <input type="date" name="date_needed" value="{{ old('date_needed') }}" autocomplete="off" required class="h-11 w-full border border-slate-400 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100">
             </div>
 
-            <div class="md:col-span-3">
+            <div>
                 <label class="mb-2 block text-sm font-bold text-slate-700">
-                    PR Title
+                    PR Priority <span class="text-red-600">*</span>
                 </label>
 
-                <input type="text" name="title" value="{{ old('title') }}" placeholder="Example: Monthly IT Supplies" autocomplete="off" spellcheck="false" class="h-11 w-full border border-slate-400 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100">
+                <select name="priority" required class="h-11 w-full border border-slate-400 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100">
+                    <option value="" disabled {{ old('priority') ? '' : 'selected' }}>
+                        Select PR priority
+                    </option>
+                    <option value="regular" {{ old('priority')==='regular' ? 'selected' : '' }}>
+                        Regular
+                    </option>
+                    <option value="important" {{ old('priority')==='important' ? 'selected' : '' }}>
+                        Important
+                    </option>
+                    <option value="urgent" {{ old('priority')==='urgent' ? 'selected' : '' }}>
+                        Urgent
+                    </option>
+                </select>
             </div>
 
-            <div class="md:col-span-3">
+            <div class="md:col-span-4">
+                <label class="mb-2 block text-sm font-bold text-slate-700">
+                    PR Title <span class="text-red-600">*</span>
+                </label>
+
+                <input type="text" name="title" value="{{ old('title') }}" placeholder="Example: Monthly IT Supplies" autocomplete="off" spellcheck="false" required class="h-11 w-full border border-slate-400 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100">
+            </div>
+
+            <div class="md:col-span-4">
                 <label class="mb-2 block text-sm font-bold text-slate-700">
                     Remarks
                 </label>
@@ -166,7 +187,7 @@
                                 <div class="flex items-start gap-2">
                                     <div class="js-item-photo-preview flex min-h-12 flex-1 flex-wrap gap-1"></div>
 
-                                    <label for="{{ $photoInputId }}" class="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center bg-slate-950 text-lg font-bold leading-none text-white transition hover:bg-slate-800">
+                                    <label for="{{ $photoInputId }}" class="js-item-photo-label inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center bg-slate-950 text-lg font-bold leading-none text-white transition hover:bg-slate-800">
                                         +
                                     </label>
 

@@ -12,9 +12,11 @@ use App\Models\PurchaseRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return redirect('/purchasing-lite');
-});
+// Route::get('/', function () {
+//     return redirect('/purchasing-lite');
+// });
+
+Route::get('/', fn() => view('app-select'))->name('app.select');
 
 Route::get('/login', function () {
     return redirect('/purchasing-lite/login');

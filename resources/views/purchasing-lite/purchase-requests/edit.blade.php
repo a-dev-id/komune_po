@@ -38,6 +38,7 @@ in_array((string) $purchaseRequest->status, $returnStatuses, true)
 && filled($purchasingReturnRemark);
 
 $isReturnedPr = in_array((string) $purchaseRequest->status, $returnStatuses, true);
+$currentPriority = old('priority', $purchaseRequest->priority ?? 'regular');
 @endphp
 
 <form id="edit-pr-form" method="POST" action="{{ route('purchasing-lite.purchase-requests.update', $purchaseRequest) }}" enctype="multipart/form-data" autocomplete="off">
@@ -51,9 +52,15 @@ $isReturnedPr = in_array((string) $purchaseRequest->status, $returnStatuses, tru
                     {{ $isReturnedPr ? 'Edit Returned Purchase Request' : 'Edit Draft Purchase Request' }}
                 </h2>
 
-                <p class="mt-1 text-base text-slate-600">
-                    {{ $purchaseRequest->pr_number }}
-                </p>
+                <div class="mt-1 flex flex-wrap items-center gap-3">
+                    <p class="text-base text-slate-600">
+                        {{ $purchaseRequest->pr_number }}
+                    </p>
+
+                    <span class="{{ $purchaseRequest->priority_badge_class }}">
+                        PR Priority: {{ $purchaseRequest->priority_label }}
+                    </span>
+                </div>
             </div>
 
             <a href="/purchasing-lite/dashboard" class="inline-flex h-10 items-center justify-center border border-slate-300 bg-white px-6 text-sm font-bold text-slate-800 transition hover:bg-slate-50">
@@ -119,7 +126,7 @@ $isReturnedPr = in_array((string) $purchaseRequest->status, $returnStatuses, tru
             </h3>
         </div>
 
-        <div class="grid grid-cols-1 gap-4 p-5 md:grid-cols-3">
+        <div class="grid grid-cols-1 gap-4 p-5 md:grid-cols-4">
             <div>
                 <label class="mb-2 block text-sm font-bold text-slate-700">
                     Requester Name
@@ -144,7 +151,25 @@ $isReturnedPr = in_array((string) $purchaseRequest->status, $returnStatuses, tru
                 <input type="date" name="date_needed" value="{{ old('date_needed', $purchaseRequest->date_needed ? $purchaseRequest->date_needed->format('Y-m-d') : '') }}" autocomplete="off" class="h-11 w-full border border-slate-400 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100">
             </div>
 
-            <div class="md:col-span-3">
+            <div>
+                <label class="mb-2 block text-sm font-bold text-slate-700">
+                    PR Priority
+                </label>
+
+                <select name="priority" class="h-11 w-full border border-slate-400 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100">
+                    <option value="regular" {{ $currentPriority==='regular' ? 'selected' : '' }}>
+                        Regular
+                    </option>
+                    <option value="important" {{ $currentPriority==='important' ? 'selected' : '' }}>
+                        Important
+                    </option>
+                    <option value="urgent" {{ $currentPriority==='urgent' ? 'selected' : '' }}>
+                        Urgent
+                    </option>
+                </select>
+            </div>
+
+            <div class="md:col-span-4">
                 <label class="mb-2 block text-sm font-bold text-slate-700">
                     PR Title
                 </label>
@@ -152,7 +177,7 @@ $isReturnedPr = in_array((string) $purchaseRequest->status, $returnStatuses, tru
                 <input type="text" name="title" value="{{ old('title', $purchaseRequest->title) }}" autocomplete="off" spellcheck="false" class="h-11 w-full border border-slate-400 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100">
             </div>
 
-            <div class="md:col-span-3">
+            <div class="md:col-span-4">
                 <label class="mb-2 block text-sm font-bold text-slate-700">
                     Requester Remarks
                 </label>

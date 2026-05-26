@@ -12,6 +12,26 @@ $formatQty = function ($value) {
 return rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.');
 };
 
+$formatPriority = function ($priority) {
+$priority = strtolower((string) ($priority ?: 'regular'));
+
+return match ($priority) {
+'urgent' => 'Urgent',
+'important' => 'Important',
+default => 'Regular',
+};
+};
+
+$priorityBadgeClass = function ($priority) {
+$priority = strtolower((string) ($priority ?: 'regular'));
+
+return match ($priority) {
+'urgent' => 'border-red-600 bg-red-50 text-red-900',
+'important' => 'border-yellow-500 bg-yellow-50 text-yellow-900',
+default => 'border-slate-400 bg-slate-100 text-slate-800',
+};
+};
+
 $getVendorNameFromVendorId = function ($vendorId) {
 if (! $vendorId || ! \Illuminate\Support\Facades\Schema::hasTable('vendors')) {
 return null;
@@ -272,6 +292,10 @@ return null;
                         Date Needed
                     </th>
 
+                    <th class="w-32 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">
+                        PR Priority
+                    </th>
+
                     <th class="w-52 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">
                         PR Title
                     </th>
@@ -324,6 +348,7 @@ return null;
                 $prNumber = $purchaseRequest->pr_number ?? $purchaseRequest->request_number ?? '-';
                 $items = $purchaseRequest->items ?? collect();
                 $rowspan = max($items->count(), 1);
+                $priority = strtolower((string) ($purchaseRequest->priority ?? 'regular'));
 
                 $grandTotal = 0;
 
@@ -367,6 +392,12 @@ return null;
 
                         <td rowspan="{{ $rowspan }}" class="align-middle border border-slate-300 px-2 py-3 text-center text-slate-800">
                             {{ $purchaseRequest->date_needed ? \Carbon\Carbon::parse($purchaseRequest->date_needed)->format('d M Y') : '-' }}
+                        </td>
+
+                        <td rowspan="{{ $rowspan }}" class="align-middle border border-slate-300 px-2 py-3 text-center">
+                            <span class="inline-flex min-w-[90px] items-center justify-center border px-2 py-2 text-xs font-bold uppercase leading-tight {{ $priorityBadgeClass($priority) }}">
+                                {{ $formatPriority($priority) }}
+                            </span>
                         </td>
 
                         <td rowspan="{{ $rowspan }}" class="align-middle border border-slate-300 px-2 py-3 font-bold text-slate-950">
@@ -460,6 +491,12 @@ return null;
                             {{ $purchaseRequest->date_needed ? \Carbon\Carbon::parse($purchaseRequest->date_needed)->format('d M Y') : '-' }}
                         </td>
 
+                        <td class="align-middle border border-slate-300 px-2 py-3 text-center">
+                            <span class="inline-flex min-w-[90px] items-center justify-center border px-2 py-2 text-xs font-bold uppercase leading-tight {{ $priorityBadgeClass($priority) }}">
+                                {{ $formatPriority($priority) }}
+                            </span>
+                        </td>
+
                         <td class="align-middle border border-slate-300 px-2 py-3 font-bold text-slate-950">
                             {{ $purchaseRequest->title }}
                         </td>
@@ -479,7 +516,7 @@ return null;
                     @endif
                     @empty
                     <tr>
-                        <td colspan="16" class="align-middle border border-slate-300 px-4 py-8 text-center text-base text-slate-500">
+                        <td colspan="17" class="align-middle border border-slate-300 px-4 py-8 text-center text-base text-slate-500">
                             No PR waiting for Owner approval.
                         </td>
                     </tr>

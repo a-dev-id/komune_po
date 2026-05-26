@@ -25,6 +25,16 @@ $formatStatus = function ($status) {
 return ucwords(str_replace('_', ' ', (string) $status));
 };
 
+$formatPriority = function ($priority) {
+$priority = strtolower((string) ($priority ?: 'regular'));
+
+return match ($priority) {
+'urgent' => 'Urgent',
+'important' => 'Important',
+default => 'Regular',
+};
+};
+
 $formatDate = function ($date) {
 if (! $date) {
 return '-';
@@ -35,6 +45,16 @@ return \Carbon\Carbon::parse($date)->format('d M Y');
 } catch (\Throwable $e) {
 return '-';
 }
+};
+
+$priorityBadgeClass = function ($priority) {
+$priority = strtolower((string) ($priority ?: 'regular'));
+
+return match ($priority) {
+'urgent' => 'border-red-600 bg-red-50 text-red-900',
+'important' => 'border-yellow-500 bg-yellow-50 text-yellow-900',
+default => 'border-slate-400 bg-slate-100 text-slate-800',
+};
 };
 
 $statusBadgeClass = function ($status) {
@@ -118,7 +138,7 @@ default => 'border-slate-400 bg-white text-slate-800',
     </div>
 
     <div class="overflow-x-auto">
-        <table class="border-collapse text-sm" style="min-width: 1500px;">
+        <table class="border-collapse text-sm" style="min-width: 1620px;">
             <thead>
                 <tr class="bg-slate-100">
                     <th class="w-16 border border-slate-300 px-4 py-3 text-center font-bold text-slate-800">
@@ -143,6 +163,10 @@ default => 'border-slate-400 bg-white text-slate-800',
 
                     <th class="w-36 border border-slate-300 px-4 py-3 text-center font-bold text-slate-800">
                         Date Needed
+                    </th>
+
+                    <th class="w-36 border border-slate-300 px-4 py-3 text-center font-bold text-slate-800">
+                        Priority
                     </th>
 
                     <th class="w-36 border border-slate-300 px-4 py-3 text-center font-bold text-slate-800">
@@ -176,6 +200,7 @@ default => 'border-slate-400 bg-white text-slate-800',
                 @php
                 $status = strtolower((string) ($purchaseRequest->status ?? ''));
                 $currentStep = strtolower((string) ($purchaseRequest->current_step ?? ''));
+                $priority = strtolower((string) ($purchaseRequest->priority ?? 'regular'));
 
                 $isPurchasingUser = in_array($normalizedRole, ['purchasing', 'admin'], true);
 
@@ -222,6 +247,12 @@ default => 'border-slate-400 bg-white text-slate-800',
                         {{ $formatDate($purchaseRequest->date_needed ?? null) }}
                     </td>
 
+                    <td class="border border-slate-300 px-4 py-3 text-center">
+                        <span class="inline-flex min-w-[105px] items-center justify-center border px-3 py-2 text-xs font-bold uppercase leading-tight {{ $priorityBadgeClass($priority) }}">
+                            {{ $formatPriority($priority) }}
+                        </span>
+                    </td>
+
                     <td class="border border-slate-300 px-4 py-3 text-center text-slate-800">
                         {{ $purchaseRequest->items_count ?? 0 }}
                     </td>
@@ -264,7 +295,7 @@ default => 'border-slate-400 bg-white text-slate-800',
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="12" class="border border-slate-300 px-4 py-6 text-center text-base text-slate-500">
+                    <td colspan="13" class="border border-slate-300 px-4 py-6 text-center text-base text-slate-500">
                         No purchase request data yet.
                     </td>
                 </tr>

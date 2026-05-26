@@ -64,6 +64,7 @@ class PurchaseRequestController extends Controller
                 'requester_name' => $validated['requester_name'],
                 'department_name' => $user->department_name ?? 'Unknown',
                 'date_needed' => $validated['date_needed'] ?? null,
+                'priority' => $validated['priority'] ?? 'regular',
                 'status' => 'draft',
                 'current_step' => 'requester',
                 'requester_remarks' => $validated['requester_remarks'] ?? null,
@@ -162,6 +163,7 @@ class PurchaseRequestController extends Controller
                 'title' => $validated['title'],
                 'requester_name' => $validated['requester_name'],
                 'date_needed' => $validated['date_needed'] ?? null,
+                'priority' => $validated['priority'] ?? 'regular',
                 'requester_remarks' => $validated['requester_remarks'] ?? null,
                 'current_status_at' => now(),
             ]);
@@ -589,6 +591,7 @@ class PurchaseRequestController extends Controller
         return $request->validate([
             'requester_name' => ['required', 'string', 'max:191'],
             'date_needed' => ['nullable', 'date'],
+            'priority' => ['required', 'string', 'in:regular,important,urgent'],
             'title' => ['required', 'string', 'max:191'],
             'requester_remarks' => ['nullable', 'string'],
 
