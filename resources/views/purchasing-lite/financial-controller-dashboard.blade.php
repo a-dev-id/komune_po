@@ -12,6 +12,18 @@ $formatQty = function ($value) {
 return rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.');
 };
 
+$isAttachmentImage = function ($path) {
+return in_array(strtolower(pathinfo((string) $path, PATHINFO_EXTENSION)), [
+'jpg',
+'jpeg',
+'png',
+'gif',
+'webp',
+'bmp',
+'svg',
+], true);
+};
+
 $formatPriority = function ($priority) {
 $priority = strtolower((string) ($priority ?: 'regular'));
 
@@ -212,7 +224,7 @@ if ($status === 'submitted_to_financial_controller') {
 return 'New';
 }
 
-return ucwords(str_replace('_', ' ', $status));
+return str_replace('Owner', 'OR', ucwords(str_replace('_', ' ', $status)));
 };
 
 $getNextFcAction = function ($status) {
@@ -295,13 +307,15 @@ return null;
                     <th class="w-36 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">Requester</th>
                     <th class="w-44 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">Department</th>
                     <th class="w-32 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">Date Needed</th>
+                    <th class="w-32 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">Created Date</th>
                     <th class="w-32 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">PR Priority</th>
                     <th class="w-52 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">PR Title</th>
                     <th class="w-56 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">Remarks</th>
-                    <th class="w-20 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">Photo</th>
+                    <th class="w-20 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">File</th>
                     <th class="min-w-[220px] align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">Item</th>
                     <th class="w-20 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">Qty</th>
                     <th class="w-20 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">Unit</th>
+                    <th class="w-20 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">Stock</th>
                     <th class="min-w-[180px] align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">Vendor</th>
                     <th class="w-32 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">Price / Unit</th>
                     <th class="w-36 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">Total</th>
@@ -367,6 +381,10 @@ return null;
                             {{ $purchaseRequest->date_needed ? \Carbon\Carbon::parse($purchaseRequest->date_needed)->format('d M Y') : '-' }}
                         </td>
 
+                        <td rowspan="{{ $rowspan }}" class="align-middle border border-slate-300 px-2 py-3 text-center text-slate-800">
+                            {{ $purchaseRequest->created_at ? \Carbon\Carbon::parse($purchaseRequest->created_at)->format('d M Y') : '-' }}
+                        </td>
+
                         <td rowspan="{{ $rowspan }}" class="align-middle border border-slate-300 px-2 py-3 text-center">
                             <span class="inline-flex min-w-[90px] items-center justify-center border px-2 py-2 text-xs font-bold uppercase leading-tight {{ $priorityBadgeClass($priority) }}">
                                 {{ $formatPriority($priority) }}
@@ -384,12 +402,17 @@ return null;
 
                         <td class="align-middle border border-slate-300 px-2 py-2">
                             @if (! empty($itemPhotos))
-                            <div class="flex justify-center">
+                            <div class="flex flex-wrap justify-center gap-1">
                                 @foreach ($itemPhotos as $photo)
                                 <a href="{{ asset('storage/' . ltrim($photo, '/')) }}" target="_blank" class="block">
+                                    @if ($isAttachmentImage($photo))
                                     <img src="{{ asset('storage/' . ltrim($photo, '/')) }}" alt="" class="h-12 w-12 border border-slate-300 object-cover">
+                                    @else
+                                    <span class="flex h-12 w-24 items-center border border-slate-300 bg-slate-50 px-2 text-xs font-bold text-slate-700">
+                                        {{ basename($photo) }}
+                                    </span>
+                                    @endif
                                 </a>
-                                @break
                                 @endforeach
                             </div>
                             @else
@@ -407,6 +430,10 @@ return null;
 
                         <td class="align-middle border border-slate-300 px-2 py-3 text-slate-800">
                             {{ $item->unit ?: '-' }}
+                        </td>
+
+                        <td class="align-middle border border-slate-300 px-2 py-3 text-right font-bold text-slate-950">
+                            {{ $item->stock !== null ? $formatQty($item->stock) : '-' }}
                         </td>
 
                         @if ($selectedVendorItem)
@@ -456,7 +483,7 @@ return null;
                     @endforeach
                     @else
                     <tr>
-                        <td colspan="18" class="align-middle border border-slate-300 px-4 py-8 text-center text-base text-slate-500">
+                        <td colspan="20" class="align-middle border border-slate-300 px-4 py-8 text-center text-base text-slate-500">
                             No item data.
                         </td>
                     </tr>
@@ -464,7 +491,7 @@ return null;
 
                     @empty
                     <tr>
-                        <td colspan="18" class="align-middle border border-slate-300 px-4 py-8 text-center text-base text-slate-500">
+                        <td colspan="20" class="align-middle border border-slate-300 px-4 py-8 text-center text-base text-slate-500">
                             No PR waiting for Financial Controller.
                         </td>
                     </tr>

@@ -10,6 +10,7 @@ use App\Http\Controllers\PurchasingLite\PurchaseRequestOwnerController;
 use App\Http\Controllers\PurchasingLite\PurchaseRequestVendorController;
 use App\Models\PurchaseRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Artisan as ArtisanRunner;
 use Illuminate\Support\Facades\Route;
 
 // Route::get('/', function () {
@@ -33,6 +34,17 @@ Route::prefix('purchasing-lite')->name('purchasing-lite.')->group(function () {
 
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
+
+    Route::get('/cron/pr-reminders', function () {
+        $expectedToken = hash('sha256', (string) config('app.key') . '|purchasing-lite-pr-reminders');
+
+        abort_unless(hash_equals($expectedToken, (string) request('token')), 403);
+
+        ArtisanRunner::call('purchasing-lite:send-pr-reminders');
+
+        return response(ArtisanRunner::output(), 200)
+            ->header('Content-Type', 'text/plain');
+    })->name('cron.pr-reminders');
 
     Route::get('/dashboard', function () {
         if (! Auth::check()) {
@@ -227,11 +239,14 @@ Route::prefix('purchasing-lite')->name('purchasing-lite.')->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | Owner
+    | OR
     |--------------------------------------------------------------------------
     */
     Route::post('/purchase-requests/owner/bulk-approve', [PurchaseRequestOwnerController::class, 'bulkApprove'])
         ->name('purchase-requests.owner.bulk-approve');
+
+    Route::post('/purchase-requests/owner/save-quantities', [PurchaseRequestOwnerController::class, 'saveQuantities'])
+        ->name('purchase-requests.owner.save-quantities');
 
     Route::get('/purchase-requests/{purchaseRequest}/owner', [PurchaseRequestOwnerController::class, 'show'])
         ->name('purchase-requests.owner.show');

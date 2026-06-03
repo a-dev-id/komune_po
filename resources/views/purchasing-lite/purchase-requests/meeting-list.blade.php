@@ -71,7 +71,7 @@ return (string) ($purchaseRequest->department_name ?? '') === $selectedDepartmen
 ->values();
 
 $formatStatus = function ($status) {
-return ucwords(str_replace('_', ' ', (string) $status));
+return str_replace('Owner', 'OR', ucwords(str_replace('_', ' ', (string) $status)));
 };
 
 $formatPriority = function ($priority) {

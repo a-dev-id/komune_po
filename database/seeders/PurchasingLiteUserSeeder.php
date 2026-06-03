@@ -91,11 +91,11 @@ class PurchasingLiteUserSeeder extends Seeder
                 'department_name' => 'Management',
             ],
             [
-                'name' => 'Owner',
+                'name' => 'OR',
                 'username' => 'owner',
                 'email' => 'owner@purchasing-lite.local',
                 'role' => 'owner',
-                'department_name' => 'Owner',
+                'department_name' => 'OR',
             ],
             [
                 'name' => 'Financial Controller',

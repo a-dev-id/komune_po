@@ -11,6 +11,7 @@ use App\Services\PurchasingLite\PurchasingLiteEmailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class PurchaseRequestController extends Controller
 {
@@ -578,7 +579,7 @@ class PurchaseRequestController extends Controller
                     'specification' => $item->default_specification,
                     'unit' => $item->default_unit,
                     'image' => $item->image,
-                    'image_url' => $item->image ? asset('storage/' . ltrim($item->image, '/')) : null,
+                    'image_url' => $this->filePathIsImage($item->image) ? asset('storage/' . ltrim($item->image, '/')) : null,
                     'last_price' => $item->last_price,
                     'currency' => $item->currency,
                 ];
@@ -601,12 +602,25 @@ class PurchaseRequestController extends Controller
             'items.*.specification' => ['nullable', 'string'],
             'items.*.quantity' => ['nullable', 'numeric', 'min:0'],
             'items.*.unit' => ['nullable', 'string', 'max:50'],
+            'items.*.stock' => ['nullable', 'numeric', 'min:0'],
 
             'items.*.item_photos' => ['nullable', 'array'],
-            'items.*.item_photos.*' => ['nullable', 'image', 'max:2048'],
+            'items.*.item_photos.*' => [
+                'nullable',
+                'file',
+                'max:10240',
+                function ($attribute, $value, $fail) {
+                    if ($this->uploadedFileIsImage($value) && $value->getSize() > 2 * 1024 * 1024) {
+                        $fail('Each image must be 2 MB or smaller.');
+                    }
+                },
+            ],
 
             'items.*.remove_photos' => ['nullable', 'array'],
             'items.*.remove_photos.*' => ['nullable', 'string'],
+        ], [
+            'items.*.item_photos.*.file' => 'Each upload must be a valid file.',
+            'items.*.item_photos.*.max' => 'Each file must be 10 MB or smaller.',
         ]);
     }
 
@@ -631,6 +645,7 @@ class PurchaseRequestController extends Controller
             $itemName = trim((string) ($item['item_name'] ?? ''));
             $specification = trim((string) ($item['specification'] ?? ''));
             $unit = trim((string) ($item['unit'] ?? ''));
+            $stock = isset($item['stock']) && $item['stock'] !== '' ? (float) $item['stock'] : null;
             $quantity = (float) ($item['quantity'] ?? 0);
 
             $itemPhotoPaths = [];
@@ -658,7 +673,7 @@ class PurchaseRequestController extends Controller
             if ($request->hasFile("items.$itemIndex.item_photos")) {
                 foreach ($request->file("items.$itemIndex.item_photos") as $photo) {
                     if ($photo) {
-                        $itemPhotoPaths[] = $photo->store('purchase-request-items', 'public');
+                        $itemPhotoPaths[] = $this->storeItemAttachment($photo);
                     }
                 }
             }
@@ -706,6 +721,7 @@ class PurchaseRequestController extends Controller
                 'specification' => $specification ?: null,
                 'quantity' => $quantity > 0 ? $quantity : 1,
                 'unit' => $unit ?: null,
+                'stock' => $stock,
                 'item_photo' => $itemPhotoPath,
                 'item_photos' => $itemPhotoPaths,
                 'needed_date' => $validated['date_needed'] ?? null,
@@ -728,6 +744,50 @@ class PurchaseRequestController extends Controller
         return array_values(array_filter(array_unique(array_map(function ($photoPath) {
             return ltrim(trim((string) $photoPath), '/');
         }, $photoPaths))));
+    }
+
+    private function storeItemAttachment($file): string
+    {
+        if ($this->uploadedFileIsImage($file)) {
+            return $file->store('purchase-request-items', 'public');
+        }
+
+        return $file->storeAs(
+            'purchase-request-items/files/' . Str::uuid()->toString(),
+            $this->cleanOriginalFileName($file->getClientOriginalName()),
+            'public'
+        );
+    }
+
+    private function uploadedFileIsImage($file): bool
+    {
+        return str_starts_with((string) $file->getMimeType(), 'image/');
+    }
+
+    private function cleanOriginalFileName(?string $fileName): string
+    {
+        $fileName = trim((string) $fileName);
+        $fileName = str_replace(['/', '\\'], '-', $fileName);
+        $fileName = preg_replace('/[\x00-\x1F\x7F]+/', '', $fileName) ?: 'file';
+
+        return substr($fileName, 0, 180);
+    }
+
+    private function filePathIsImage(?string $path): bool
+    {
+        if (! $path) {
+            return false;
+        }
+
+        return in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), [
+            'jpg',
+            'jpeg',
+            'png',
+            'gif',
+            'webp',
+            'bmp',
+            'svg',
+        ], true);
     }
 
     private function requesterEditableStatuses(): array

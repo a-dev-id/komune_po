@@ -137,11 +137,11 @@
                         </th>
 
                         <th class="w-64 border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
-                            Photos
+                            Files
                         </th>
 
                         <th class="min-w-[380px] border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
-                            Specification
+                            Specification / Description
                         </th>
 
                         <th class="w-32 border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
@@ -150,6 +150,10 @@
 
                         <th class="w-32 border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
                             Unit
+                        </th>
+
+                        <th class="w-32 border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
+                            Stock
                         </th>
                     </tr>
                 </thead>
@@ -191,7 +195,7 @@
                                         +
                                     </label>
 
-                                    <input id="{{ $photoInputId }}" type="file" name="items[{{ $loop->iteration }}][item_photos][]" accept="image/*" multiple class="js-item-photo-input hidden">
+                                    <input id="{{ $photoInputId }}" type="file" name="items[{{ $loop->iteration }}][item_photos][]" multiple class="js-item-photo-input hidden">
                                 </div>
                             </td>
 
@@ -205,6 +209,10 @@
 
                             <td class="border border-slate-300 p-0">
                                 <input type="text" name="items[{{ $loop->iteration }}][unit]" value="{{ $oldItem['unit'] ?? 'pcs' }}" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off" class="js-item-unit h-10 w-full border-0 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-100">
+                            </td>
+
+                            <td class="border border-slate-300 p-0">
+                                <input type="text" name="items[{{ $loop->iteration }}][stock]" value="{{ $oldItem['stock'] ?? '' }}" min="0" step="0.01" autocomplete="off" class="h-10 w-full border-0 px-3 text-right text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100">
                             </td>
                         </tr>
                         @endforeach
@@ -271,18 +279,68 @@
             });
         }
 
-        function renderPreviewImage(previewBox, imageUrl) {
-            if (! previewBox || ! imageUrl) {
+        function fileIsImage(file) {
+            return file && String(file.type || '').startsWith('image/');
+        }
+
+        function syncFileInputFiles(fileInput, files) {
+            const dataTransfer = new DataTransfer();
+
+            files.forEach(function (file) {
+                dataTransfer.items.add(file);
+            });
+
+            fileInput.files = dataTransfer.files;
+            fileInput._selectedFiles = files;
+        }
+
+        function renderPreviewFile(previewBox, fileUrl, fileName = '', isImage = false, fileInput = null, fileObject = null) {
+            if (! previewBox || ! fileUrl) {
                 return;
             }
 
-            const img = document.createElement('img');
+            const wrapper = document.createElement('div');
+            wrapper.className = isImage ? 'relative h-12 w-12' : 'relative h-12 min-w-24 max-w-40';
 
-            img.src = imageUrl;
-            img.alt = '';
-            img.className = 'h-12 w-12 border border-slate-300 object-cover';
+            const link = document.createElement('a');
+            link.href = fileUrl;
+            link.target = '_blank';
 
-            previewBox.appendChild(img);
+            if (isImage) {
+                const img = document.createElement('img');
+
+                img.src = fileUrl;
+                img.alt = '';
+                img.className = 'h-12 w-12 border border-slate-300 object-cover';
+
+                link.appendChild(img);
+            } else {
+                link.className = 'flex h-12 min-w-24 max-w-40 items-center border border-slate-300 bg-slate-50 px-2 text-xs font-bold text-slate-700 hover:bg-slate-100';
+                link.textContent = fileName || 'File';
+            }
+
+            wrapper.appendChild(link);
+
+            if (fileInput && fileObject) {
+                const removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.className = 'absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center bg-red-600 text-xs font-bold leading-none text-white hover:bg-red-700';
+                removeButton.title = 'Remove file';
+                removeButton.textContent = '×';
+
+                removeButton.addEventListener('click', function () {
+                    const files = (fileInput._selectedFiles || []).filter(function (file) {
+                        return file !== fileObject;
+                    });
+
+                    syncFileInputFiles(fileInput, files);
+                    wrapper.remove();
+                });
+
+                wrapper.appendChild(removeButton);
+            }
+
+            previewBox.appendChild(wrapper);
         }
 
         function setupPhotoPreview(row) {
@@ -294,16 +352,19 @@
             }
 
             fileInput.addEventListener('change', function () {
-                previewBox.innerHTML = '';
+                const selectedFiles = fileInput._selectedFiles || [];
+                const incomingFiles = Array.from(fileInput.files || []);
+                const files = selectedFiles.concat(incomingFiles);
 
-                const files = Array.from(fileInput.files || []);
+                syncFileInputFiles(fileInput, files);
+                previewBox.innerHTML = '';
 
                 if (! files.length) {
                     return;
                 }
 
                 files.forEach(function (file) {
-                    renderPreviewImage(previewBox, URL.createObjectURL(file));
+                    renderPreviewFile(previewBox, URL.createObjectURL(file), file.name, fileIsImage(file), fileInput, file);
                 });
             });
         }
@@ -387,7 +448,7 @@
 
                                     if (previewBox && item.image_url) {
                                         previewBox.innerHTML = '';
-                                        renderPreviewImage(previewBox, item.image_url);
+                                        renderPreviewFile(previewBox, item.image_url, item.name, true);
                                     }
 
                                     resultBox.classList.add('hidden');
@@ -449,7 +510,6 @@
                             id="item_photos_${rowCount}"
                             type="file"
                             name="items[${rowCount}][item_photos][]"
-                            accept="image/*"
                             multiple
                             class="js-item-photo-input hidden"
                         >
@@ -475,7 +535,7 @@
                         min="0"
                         step="0.01"
                         autocomplete="off"
-                        class="h-10 w-full border-0 px-3 text-right text-sm outline-none focus:ring-2 focus:ring-blue-100"
+                        class="h-10 w-full border-0 px-3 text-right text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100"
                     >
                 </td>
 
@@ -489,6 +549,17 @@
                         autocorrect="off"
                         autocapitalize="off"
                         class="js-item-unit h-10 w-full border-0 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-100"
+                    >
+                </td>
+
+                <td class="border border-slate-300 p-0">
+                    <input
+                        type="text"
+                        name="items[${rowCount}][stock]"
+                        min="0"
+                        step="0.01"
+                        autocomplete="off"
+                        class="h-10 w-full border-0 px-3 text-right text-sm outline-none focus:ring-2 focus:ring-blue-100"
                     >
                 </td>
             `;

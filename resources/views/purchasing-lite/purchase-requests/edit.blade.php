@@ -39,6 +39,18 @@ in_array((string) $purchaseRequest->status, $returnStatuses, true)
 
 $isReturnedPr = in_array((string) $purchaseRequest->status, $returnStatuses, true);
 $currentPriority = old('priority', $purchaseRequest->priority ?? 'regular');
+
+$isAttachmentImage = function ($path) {
+return in_array(strtolower(pathinfo((string) $path, PATHINFO_EXTENSION)), [
+'jpg',
+'jpeg',
+'png',
+'gif',
+'webp',
+'bmp',
+'svg',
+], true);
+};
 @endphp
 
 <form id="edit-pr-form" method="POST" action="{{ route('purchasing-lite.purchase-requests.update', $purchaseRequest) }}" enctype="multipart/form-data" autocomplete="off">
@@ -195,7 +207,7 @@ $currentPriority = old('priority', $purchaseRequest->priority ?? 'regular');
                 </h3>
 
                 <p class="mt-1 text-sm text-slate-600">
-                    Edit the draft items below. Existing photos will be kept, and new uploaded photos will be added.
+                    Edit the draft items below. Existing files will be kept, and new uploaded files will be added.
                 </p>
             </div>
 
@@ -217,7 +229,7 @@ $currentPriority = old('priority', $purchaseRequest->priority ?? 'regular');
                         </th>
 
                         <th class="w-64 border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
-                            Photos
+                            Files
                         </th>
 
                         <th class="min-w-[380px] border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
@@ -230,6 +242,10 @@ $currentPriority = old('priority', $purchaseRequest->priority ?? 'regular');
 
                         <th class="w-32 border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
                             Unit
+                        </th>
+
+                        <th class="w-32 border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
+                            Stock
                         </th>
                     </tr>
                 </thead>
@@ -266,10 +282,16 @@ $currentPriority = old('priority', $purchaseRequest->priority ?? 'regular');
                                         @foreach ($photos as $photo)
                                         <div class="relative h-12 w-12" data-existing-photo>
                                             <a href="{{ asset('storage/' . ltrim($photo, '/')) }}" target="_blank">
+                                                @if ($isAttachmentImage($photo))
                                                 <img src="{{ asset('storage/' . ltrim($photo, '/')) }}" alt="" class="h-12 w-12 border border-slate-300 object-cover">
+                                                @else
+                                                <span class="flex h-12 w-24 items-center border border-slate-300 bg-slate-50 px-2 text-xs font-bold text-slate-700">
+                                                    {{ basename($photo) }}
+                                                </span>
+                                                @endif
                                             </a>
 
-                                            <button type="button" class="js-remove-existing-photo absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center bg-red-600 text-xs font-bold leading-none text-white hover:bg-red-700" title="Remove image" data-photo-path="{{ $photo }}" data-item-row-number="{{ $itemRowNumber }}">
+                                            <button type="button" class="js-remove-existing-photo absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center bg-red-600 text-xs font-bold leading-none text-white hover:bg-red-700" title="Remove file" data-photo-path="{{ $photo }}" data-item-row-number="{{ $itemRowNumber }}">
                                                 ×
                                             </button>
                                         </div>
@@ -280,7 +302,7 @@ $currentPriority = old('priority', $purchaseRequest->priority ?? 'regular');
                                         +
                                     </label>
 
-                                    <input id="{{ $photoInputId }}" type="file" name="items[{{ $itemRowNumber }}][item_photos][]" accept="image/*" multiple class="js-item-photo-input hidden">
+                                    <input id="{{ $photoInputId }}" type="file" name="items[{{ $itemRowNumber }}][item_photos][]" multiple class="js-item-photo-input hidden">
                                 </div>
                             </td>
 
@@ -294,6 +316,10 @@ $currentPriority = old('priority', $purchaseRequest->priority ?? 'regular');
 
                             <td class="border border-slate-300 p-0">
                                 <input type="text" name="items[{{ $itemRowNumber }}][unit]" value="{{ old('items.' . $itemRowNumber . '.unit', $item->unit) }}" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off" class="js-item-unit h-10 w-full border-0 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-100">
+                            </td>
+
+                            <td class="border border-slate-300 p-0">
+                                <input type="text" name="items[{{ $itemRowNumber }}][stock]" value="{{ old('items.' . $itemRowNumber . '.stock', filled($item->stock) ? rtrim(rtrim(number_format((float) $item->stock, 2, '.', ''), '0'), '.') : '') }}" min="0" step="0.01" autocomplete="off" class="h-10 w-full border-0 px-3 text-right text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100">
                             </td>
                         </tr>
                         @endforeach
@@ -386,43 +412,68 @@ $currentPriority = old('priority', $purchaseRequest->priority ?? 'regular');
             editForm.appendChild(hiddenInput);
         }
 
-        function renderPreviewImage(previewBox, imageUrl, fileInput = null, fileObject = null) {
-            if (! previewBox || ! imageUrl) {
+        function fileIsImage(file) {
+            return file && String(file.type || '').startsWith('image/');
+        }
+
+        function syncFileInputFiles(fileInput, files) {
+            const dataTransfer = new DataTransfer();
+
+            files.forEach(function (file) {
+                dataTransfer.items.add(file);
+            });
+
+            fileInput.files = dataTransfer.files;
+            fileInput._selectedFiles = files;
+        }
+
+        function renderPreviewFile(previewBox, fileUrl, fileName = '', isImage = false, fileInput = null, fileObject = null) {
+            if (! previewBox || ! fileUrl) {
                 return;
             }
 
             const wrapper = document.createElement('div');
-            wrapper.className = 'relative h-12 w-12';
+            wrapper.className = isImage ? 'relative h-12 w-12' : 'relative h-12 min-w-24 max-w-40';
 
-            const img = document.createElement('img');
-            img.src = imageUrl;
-            img.alt = '';
-            img.className = 'h-12 w-12 border border-slate-300 object-cover';
+            if (fileObject) {
+                wrapper.setAttribute('data-new-upload-preview', '1');
+            }
+
+            const link = document.createElement('a');
+            link.href = fileUrl;
+            link.target = '_blank';
+
+            if (isImage) {
+                const img = document.createElement('img');
+                img.src = fileUrl;
+                img.alt = '';
+                img.className = 'h-12 w-12 border border-slate-300 object-cover';
+
+                link.appendChild(img);
+            } else {
+                link.className = 'flex h-12 min-w-24 max-w-40 items-center border border-slate-300 bg-slate-50 px-2 text-xs font-bold text-slate-700 hover:bg-slate-100';
+                link.textContent = fileName || 'File';
+            }
 
             const removeButton = document.createElement('button');
             removeButton.type = 'button';
             removeButton.className = 'absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center bg-red-600 text-xs font-bold leading-none text-white hover:bg-red-700';
-            removeButton.title = 'Remove image';
+            removeButton.title = 'Remove file';
             removeButton.textContent = '×';
 
             removeButton.addEventListener('click', function () {
                 if (fileInput && fileObject) {
-                    const dataTransfer = new DataTransfer();
-                    const files = Array.from(fileInput.files || []);
-
-                    files.forEach(function (file) {
-                        if (file !== fileObject) {
-                            dataTransfer.items.add(file);
-                        }
+                    const files = (fileInput._selectedFiles || []).filter(function (file) {
+                        return file !== fileObject;
                     });
 
-                    fileInput.files = dataTransfer.files;
+                    syncFileInputFiles(fileInput, files);
                 }
 
                 wrapper.remove();
             });
 
-            wrapper.appendChild(img);
+            wrapper.appendChild(link);
             wrapper.appendChild(removeButton);
             previewBox.appendChild(wrapper);
         }
@@ -454,10 +505,18 @@ $currentPriority = old('priority', $purchaseRequest->priority ?? 'regular');
             }
 
             fileInput.addEventListener('change', function () {
-                const files = Array.from(fileInput.files || []);
+                const selectedFiles = fileInput._selectedFiles || [];
+                const incomingFiles = Array.from(fileInput.files || []);
+                const files = selectedFiles.concat(incomingFiles);
+
+                syncFileInputFiles(fileInput, files);
+
+                previewBox.querySelectorAll('[data-new-upload-preview]').forEach(function (preview) {
+                    preview.remove();
+                });
 
                 files.forEach(function (file) {
-                    renderPreviewImage(previewBox, URL.createObjectURL(file), fileInput, file);
+                    renderPreviewFile(previewBox, URL.createObjectURL(file), file.name, fileIsImage(file), fileInput, file);
                 });
             });
         }
@@ -540,7 +599,7 @@ $currentPriority = old('priority', $purchaseRequest->priority ?? 'regular');
                                     }
 
                                     if (previewBox && item.image_url && previewBox.children.length === 0) {
-                                        renderPreviewImage(previewBox, item.image_url);
+                                        renderPreviewFile(previewBox, item.image_url, item.name, true);
                                     }
 
                                     resultBox.classList.add('hidden');
@@ -608,7 +667,6 @@ $currentPriority = old('priority', $purchaseRequest->priority ?? 'regular');
                             id="item_photos_${rowCount}"
                             type="file"
                             name="items[${rowCount}][item_photos][]"
-                            accept="image/*"
                             multiple
                             class="js-item-photo-input hidden"
                         >
@@ -648,6 +706,17 @@ $currentPriority = old('priority', $purchaseRequest->priority ?? 'regular');
                         autocorrect="off"
                         autocapitalize="off"
                         class="js-item-unit h-10 w-full border-0 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-100"
+                    >
+                </td>
+
+                <td class="border border-slate-300 p-0">
+                    <input
+                        type="text"
+                        name="items[${rowCount}][stock]"
+                        min="0"
+                        step="0.01"
+                        autocomplete="off"
+                        class="h-10 w-full border-0 px-3 text-right text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100"
                     >
                 </td>
             `;

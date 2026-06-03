@@ -89,7 +89,7 @@ class PurchaseRequestGmController extends Controller
         try {
             $fromStatus = $purchaseRequest->status;
             $fromStep = $purchaseRequest->current_step;
-            $remarks = $validated['remarks'] ?: 'Approved by General Manager and sent to Owner.';
+            $remarks = $validated['remarks'] ?: 'Approved by General Manager and sent to OR.';
 
             $purchaseRequest->update([
                 'status' => 'submitted_to_owner',
@@ -115,17 +115,17 @@ class PurchaseRequestGmController extends Controller
             app(PurchasingLiteEmailService::class)->sendToRoles(
                 purchaseRequest: $purchaseRequest,
                 roles: ['owner'],
-                subject: 'PR Waiting for Owner Approval - ' . $purchaseRequest->pr_number,
+                subject: 'PR Waiting for OR Approval - ' . $purchaseRequest->pr_number,
                 title: 'PR Approved by GM',
-                messageText: 'General Manager has approved this purchase request. Please review it from your Owner dashboard.',
-                buttonLabel: 'Open Owner Dashboard',
+                messageText: 'General Manager has approved this purchase request. Please review it from your OR dashboard.',
+                buttonLabel: 'Open OR Dashboard',
                 buttonUrl: route('purchasing-lite.dashboard'),
                 remarks: $remarks
             );
 
             return redirect()
                 ->route('purchasing-lite.dashboard')
-                ->with('success', 'PR has been approved and sent to Owner.');
+                ->with('success', 'PR has been approved and sent to OR.');
         } catch (\Throwable $e) {
             DB::rollBack();
 
@@ -380,10 +380,10 @@ class PurchaseRequestGmController extends Controller
             app(PurchasingLiteEmailService::class)->sendToRoles(
                 purchaseRequest: $purchaseRequest,
                 roles: ['owner'],
-                subject: 'PR Waiting for Owner Approval - ' . $purchaseRequest->pr_number,
+                subject: 'PR Waiting for OR Approval - ' . $purchaseRequest->pr_number,
                 title: 'PR Partially Approved by GM',
-                messageText: 'General Manager has approved selected items from this purchase request. Please review it from your Owner dashboard.',
-                buttonLabel: 'Open Owner Dashboard',
+                messageText: 'General Manager has approved selected items from this purchase request. Please review it from your OR dashboard.',
+                buttonLabel: 'Open OR Dashboard',
                 buttonUrl: route('purchasing-lite.dashboard'),
                 remarks: $remarks
             );
@@ -401,7 +401,7 @@ class PurchaseRequestGmController extends Controller
 
             return redirect()
                 ->route('purchasing-lite.dashboard')
-                ->with('success', 'Selected items have been approved and sent to Owner. Remaining items were split to ' . $newPrNumber . '.');
+                ->with('success', 'Selected items have been approved and sent to OR. Remaining items were split to ' . $newPrNumber . '.');
         } catch (\Throwable $e) {
             DB::rollBack();
 

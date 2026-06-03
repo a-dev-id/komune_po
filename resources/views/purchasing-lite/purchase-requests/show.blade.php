@@ -71,6 +71,18 @@ $formatQty = function ($value) {
 return rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.');
 };
 
+$isAttachmentImage = function ($path) {
+return in_array(strtolower(pathinfo((string) $path, PATHINFO_EXTENSION)), [
+'jpg',
+'jpeg',
+'png',
+'gif',
+'webp',
+'bmp',
+'svg',
+], true);
+};
+
 $formatDateForDisplay = function ($value) {
 if (! filled($value)) {
 return '-';
@@ -102,7 +114,7 @@ if ($value === '') {
 return '-';
 }
 
-return ucwords(str_replace(['_', '-'], ' ', $value));
+return str_replace('Owner', 'OR', ucwords(str_replace(['_', '-'], ' ', $value)));
 };
 
 $getLogRemarks = function ($log) {
@@ -787,14 +799,14 @@ $purchaseRequest->handover_remarks
             </p>
 
             <p class="mt-2 text-base font-bold capitalize text-slate-950">
-                {{ str_replace('_', ' ', $purchaseRequest->current_step) }}
+                {{ $formatActionLabel($purchaseRequest->current_step) }}
             </p>
         </div>
 
         <div>
-            <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
-                Created At
-            </p>
+                <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
+                Created Date
+                </p>
 
             <p class="mt-2 text-base font-bold text-slate-950">
                 {{ $purchaseRequest->created_at ? $purchaseRequest->created_at->format('d M Y H:i') : '-' }}
@@ -1009,7 +1021,7 @@ $purchaseRequest->handover_remarks
                     </th>
 
                     <th class="w-28 align-middle border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
-                        Photos
+                        Files
                     </th>
 
                     <th class="min-w-[260px] align-middle border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
@@ -1026,6 +1038,10 @@ $purchaseRequest->handover_remarks
 
                     <th class="w-24 align-middle border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
                         Unit
+                    </th>
+
+                    <th class="w-24 align-middle border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
+                        Stock
                     </th>
 
                     @if ($showSelectedVendorDetail)
@@ -1062,16 +1078,21 @@ $purchaseRequest->handover_remarks
 
                         <td class="align-middle border border-slate-300 px-3 py-3">
                             @if (count($photos))
-                            <div class="flex justify-center">
+                            <div class="flex flex-wrap justify-center gap-1">
                                 @foreach ($photos as $photo)
                                 <a href="{{ asset('storage/' . ltrim($photo, '/')) }}" target="_blank">
+                                    @if ($isAttachmentImage($photo))
                                     <img src="{{ asset('storage/' . ltrim($photo, '/')) }}" alt="" class="h-16 w-16 border border-slate-300 object-cover">
+                                    @else
+                                    <span class="flex h-16 w-28 items-center border border-slate-300 bg-slate-50 px-2 text-xs font-bold text-slate-700">
+                                        {{ basename($photo) }}
+                                    </span>
+                                    @endif
                                 </a>
-                                @break
                                 @endforeach
                             </div>
                             @else
-                            <span class="block text-center text-slate-400">No photo</span>
+                            <span class="block text-center text-slate-400">No file</span>
                             @endif
                         </td>
 
@@ -1089,6 +1110,10 @@ $purchaseRequest->handover_remarks
 
                         <td class="align-middle border border-slate-300 px-3 py-3 text-slate-800">
                             {{ $item->unit ?: '-' }}
+                        </td>
+
+                        <td class="align-middle border border-slate-300 px-3 py-3 text-right font-bold text-slate-950">
+                            {{ $item->stock !== null ? $formatQty($item->stock) : '-' }}
                         </td>
 
                         @if ($showSelectedVendorDetail)
@@ -1113,7 +1138,7 @@ $purchaseRequest->handover_remarks
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="{{ $showSelectedVendorDetail ? 9 : 6 }}" class="border border-slate-300 px-4 py-6 text-center text-base text-slate-500">
+                        <td colspan="{{ $showSelectedVendorDetail ? 10 : 7 }}" class="border border-slate-300 px-4 py-6 text-center text-base text-slate-500">
                             No item data.
                         </td>
                     </tr>
@@ -1123,7 +1148,7 @@ $purchaseRequest->handover_remarks
             @if ($showSelectedVendorDetail && ($purchaseRequest->items ?? collect())->count() > 0)
             <tfoot>
                 <tr class="bg-slate-100">
-                    <td colspan="8" class="align-middle border border-slate-300 px-3 py-4 text-right text-base font-bold text-slate-950">
+                    <td colspan="9" class="align-middle border border-slate-300 px-3 py-4 text-right text-base font-bold text-slate-950">
                         Grand Total
                     </td>
 

@@ -48,6 +48,18 @@ $priorityBadgeClass = match ($priority) {
 'important' => 'border-yellow-500 bg-yellow-50 text-yellow-900',
 default => 'border-slate-400 bg-slate-100 text-slate-800',
 };
+
+$isAttachmentImage = function ($path) {
+return in_array(strtolower(pathinfo((string) $path, PATHINFO_EXTENSION)), [
+'jpg',
+'jpeg',
+'png',
+'gif',
+'webp',
+'bmp',
+'svg',
+], true);
+};
 @endphp
 
 <section class="mb-6 border border-slate-300 bg-white p-6 shadow-sm">
@@ -89,7 +101,7 @@ default => 'border-slate-400 bg-slate-100 text-slate-800',
         </h3>
     </div>
 
-    <div class="grid grid-cols-1 gap-4 p-5 md:grid-cols-5">
+    <div class="grid grid-cols-1 gap-4 p-5 md:grid-cols-6">
         <div>
             <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
                 Requester
@@ -142,7 +154,17 @@ default => 'border-slate-400 bg-slate-100 text-slate-800',
             </p>
         </div>
 
-        <div class="md:col-span-5">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
+                Created Date
+            </p>
+
+            <p class="mt-2 text-base font-bold text-slate-950">
+                {{ $purchaseRequest->created_at ? $purchaseRequest->created_at->format('d M Y') : '-' }}
+            </p>
+        </div>
+
+        <div class="md:col-span-6">
             <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
                 Requester Remarks
             </p>
@@ -220,7 +242,7 @@ default => 'border-slate-400 bg-slate-100 text-slate-800',
                         </th>
 
                         <th rowspan="2" class="w-40 border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
-                            Photos
+                            Files
                         </th>
 
                         <th rowspan="2" class="min-w-[250px] border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
@@ -233,6 +255,10 @@ default => 'border-slate-400 bg-slate-100 text-slate-800',
 
                         <th rowspan="2" class="w-24 border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
                             Unit
+                        </th>
+
+                        <th rowspan="2" class="w-24 border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
+                            Stock
                         </th>
 
                         <th colspan="2" class="border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
@@ -305,7 +331,13 @@ default => 'border-slate-400 bg-slate-100 text-slate-800',
                                 <div class="flex flex-wrap gap-1">
                                     @foreach ($itemPhotos as $photo)
                                     <a href="{{ asset('storage/' . ltrim($photo, '/')) }}" target="_blank" class="block">
+                                        @if ($isAttachmentImage($photo))
                                         <img src="{{ asset('storage/' . ltrim($photo, '/')) }}" alt="" class="h-12 w-12 border border-slate-300 object-cover">
+                                        @else
+                                        <span class="flex h-12 w-24 items-center border border-slate-300 bg-slate-50 px-2 text-xs font-bold text-slate-700">
+                                            {{ basename($photo) }}
+                                        </span>
+                                        @endif
                                     </a>
                                     @endforeach
                                 </div>
@@ -324,6 +356,10 @@ default => 'border-slate-400 bg-slate-100 text-slate-800',
 
                             <td class="border border-slate-300 p-0 align-top">
                                 <input type="text" name="items[{{ $item->id }}][unit]" value="{{ $unitValue }}" autocomplete="off" spellcheck="false" class="h-11 w-full border-0 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-100">
+                            </td>
+
+                            <td class="border border-slate-300 px-3 py-3 text-right font-bold text-slate-950">
+                                {{ $item->stock !== null ? rtrim(rtrim(number_format((float) $item->stock, 2, '.', ''), '0'), '.') : '-' }}
                             </td>
 
                             @for ($bidNumber = 1; $bidNumber <= 3; $bidNumber++) @php $savedVendorName=$savedBids[$item->id][$bidNumber]['vendor_name'] ?? '';
@@ -350,7 +386,7 @@ default => 'border-slate-400 bg-slate-100 text-slate-800',
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="12" class="border border-slate-300 px-4 py-6 text-center text-base text-slate-500">
+                            <td colspan="13" class="border border-slate-300 px-4 py-6 text-center text-base text-slate-500">
                                 No item data.
                             </td>
                         </tr>

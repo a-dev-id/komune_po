@@ -87,10 +87,14 @@ class PurchaseRequestOwnerController extends Controller
             'approved_item_ids' => ['required', 'array', 'min:1'],
             'approved_item_ids.*' => ['array'],
             'approved_item_ids.*.*' => ['integer'],
+            'owner_quantities' => ['nullable', 'array'],
+            'owner_quantities.*' => ['array'],
+            'owner_quantities.*.*' => ['nullable', 'numeric', 'min:0.01'],
             'remarks' => ['nullable', 'string', 'max:5000'],
         ]);
 
         $remarks = trim((string) ($validated['remarks'] ?? ''));
+        $ownerQuantities = $this->normalizeOwnerQuantities($validated['owner_quantities'] ?? []);
 
         $approvedGroups = collect($validated['approved_item_ids'])
             ->mapWithKeys(function ($itemIds, $purchaseRequestId) {
@@ -109,7 +113,7 @@ class PurchaseRequestOwnerController extends Controller
 
         $results = collect();
 
-        DB::transaction(function () use ($approvedGroups, $remarks, &$results) {
+        DB::transaction(function () use ($approvedGroups, $ownerQuantities, $remarks, &$results) {
             foreach ($approvedGroups as $purchaseRequestId => $approvedItemIds) {
                 $purchaseRequest = PurchaseRequest::query()
                     ->with('items')
@@ -120,6 +124,14 @@ class PurchaseRequestOwnerController extends Controller
                 if (! $purchaseRequest) {
                     continue;
                 }
+
+                $this->applyOwnerQuantityAdjustments(
+                    $purchaseRequest,
+                    $approvedItemIds,
+                    $ownerQuantities[$purchaseRequestId] ?? []
+                );
+
+                $purchaseRequest->load('items');
 
                 $result = $this->processOwnerSelectedItems($purchaseRequest, $approvedItemIds, $remarks);
 
@@ -136,6 +148,45 @@ class PurchaseRequestOwnerController extends Controller
         return redirect()
             ->route('purchasing-lite.dashboard')
             ->with('success', 'Selected item(s) have been approved and sent to Financial Controller.');
+    }
+
+    public function saveQuantities(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'owner_quantities' => ['required', 'array', 'min:1'],
+            'owner_quantities.*' => ['array'],
+            'owner_quantities.*.*' => ['nullable', 'numeric', 'min:0.01'],
+        ]);
+
+        $ownerQuantities = $this->normalizeOwnerQuantities($validated['owner_quantities'] ?? []);
+
+        if (empty($ownerQuantities)) {
+            return back()->with('error', 'Please enter at least one valid quantity to save.');
+        }
+
+        DB::transaction(function () use ($ownerQuantities) {
+            foreach ($ownerQuantities as $purchaseRequestId => $itemQuantities) {
+                $purchaseRequest = PurchaseRequest::query()
+                    ->with('items')
+                    ->where('id', $purchaseRequestId)
+                    ->where('current_step', 'owner')
+                    ->first();
+
+                if (! $purchaseRequest) {
+                    continue;
+                }
+
+                $this->applyOwnerQuantityAdjustments(
+                    $purchaseRequest,
+                    array_keys($itemQuantities),
+                    $itemQuantities
+                );
+            }
+        });
+
+        return redirect()
+            ->route('purchasing-lite.dashboard')
+            ->with('success', 'OR quantity changes have been saved.');
     }
 
     public function returnToGm(Request $request, PurchaseRequest $purchaseRequest): RedirectResponse
@@ -170,9 +221,9 @@ class PurchaseRequestOwnerController extends Controller
         app(PurchasingLiteEmailService::class)->sendToRoles(
             purchaseRequest: $purchaseRequest,
             roles: ['gm'],
-            subject: 'PR Returned to GM by Owner - ' . $this->getPurchaseRequestNumber($purchaseRequest),
-            title: 'PR Returned by Owner',
-            messageText: 'Owner has returned this purchase request to GM for review.',
+            subject: 'PR Returned to GM by OR - ' . $this->getPurchaseRequestNumber($purchaseRequest),
+            title: 'PR Returned by OR',
+            messageText: 'OR has returned this purchase request to GM for review.',
             buttonLabel: 'Open GM Review',
             buttonUrl: route('purchasing-lite.purchase-requests.gm.show', $purchaseRequest),
             remarks: $remarks
@@ -217,9 +268,9 @@ class PurchaseRequestOwnerController extends Controller
 
         app(PurchasingLiteEmailService::class)->sendToRequester(
             purchaseRequest: $purchaseRequest,
-            subject: 'PR Rejected by Owner - ' . $this->getPurchaseRequestNumber($purchaseRequest),
-            title: 'PR Rejected by Owner',
-            messageText: 'Owner has rejected this purchase request.',
+            subject: 'PR Rejected by OR - ' . $this->getPurchaseRequestNumber($purchaseRequest),
+            title: 'PR Rejected by OR',
+            messageText: 'OR has rejected this purchase request.',
             buttonLabel: 'Open PR',
             buttonUrl: route('purchasing-lite.purchase-requests.show', $purchaseRequest),
             remarks: $remarks
@@ -228,9 +279,9 @@ class PurchaseRequestOwnerController extends Controller
         app(PurchasingLiteEmailService::class)->sendToRoles(
             purchaseRequest: $purchaseRequest,
             roles: ['gm', 'cost_control', 'purchasing'],
-            subject: 'PR Rejected by Owner - ' . $this->getPurchaseRequestNumber($purchaseRequest),
-            title: 'PR Rejected by Owner',
-            messageText: 'Owner has rejected this purchase request.',
+            subject: 'PR Rejected by OR - ' . $this->getPurchaseRequestNumber($purchaseRequest),
+            title: 'PR Rejected by OR',
+            messageText: 'OR has rejected this purchase request.',
             buttonLabel: 'Open PR List',
             buttonUrl: route('purchasing-lite.purchase-requests.meeting-list'),
             remarks: $remarks
@@ -482,6 +533,169 @@ class PurchaseRequestOwnerController extends Controller
         }
     }
 
+    private function normalizeOwnerQuantities(array $ownerQuantities): array
+    {
+        $normalized = [];
+
+        foreach ($ownerQuantities as $purchaseRequestId => $itemQuantities) {
+            if (! is_array($itemQuantities)) {
+                continue;
+            }
+
+            foreach ($itemQuantities as $itemId => $quantity) {
+                $quantity = (float) $quantity;
+
+                if ($quantity <= 0) {
+                    continue;
+                }
+
+                $normalized[(int) $purchaseRequestId][(int) $itemId] = $quantity;
+            }
+        }
+
+        return $normalized;
+    }
+
+    private function applyOwnerQuantityAdjustments(PurchaseRequest $purchaseRequest, $approvedItemIds, array $itemQuantities): void
+    {
+        if (empty($itemQuantities)) {
+            return;
+        }
+
+        $approvedItemIds = collect($approvedItemIds)
+            ->map(fn($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        foreach ($purchaseRequest->items as $item) {
+            $itemId = (int) $item->id;
+
+            if (! $approvedItemIds->contains($itemId) || ! isset($itemQuantities[$itemId])) {
+                continue;
+            }
+
+            $quantity = (float) $itemQuantities[$itemId];
+
+            if ($quantity <= 0) {
+                continue;
+            }
+
+            if (Schema::hasColumn($item->getTable(), 'quantity')) {
+                $item->quantity = $quantity;
+                $item->save();
+            }
+
+            $this->updateSelectedVendorItemQuantity($purchaseRequest, $itemId, $quantity);
+        }
+    }
+
+    private function updateSelectedVendorItemQuantity(PurchaseRequest $purchaseRequest, int $itemId, float $quantity): void
+    {
+        $candidateTables = [
+            'purchase_request_offer_items',
+            'purchase_request_vendor_offer_items',
+            'purchase_request_vendor_items',
+            'purchase_request_vendor_bids',
+            'purchase_request_bids',
+            'vendor_bids',
+        ];
+
+        foreach ($candidateTables as $table) {
+            if (! Schema::hasTable($table)) {
+                continue;
+            }
+
+            $query = DB::table($table);
+
+            if (Schema::hasColumn($table, 'purchase_request_id')) {
+                $query->where('purchase_request_id', $purchaseRequest->id);
+            }
+
+            if (Schema::hasColumn($table, 'purchase_request_item_id')) {
+                $query->where('purchase_request_item_id', $itemId);
+            } elseif (Schema::hasColumn($table, 'item_id')) {
+                $query->where('item_id', $itemId);
+            } else {
+                continue;
+            }
+
+            if (Schema::hasColumn($table, 'is_selected')) {
+                $query->where('is_selected', 1);
+            } elseif (Schema::hasColumn($table, 'is_selected_by_cost_control')) {
+                $query->where('is_selected_by_cost_control', 1);
+            } elseif (Schema::hasColumn($table, 'selected_by_cost_control')) {
+                $query->where('selected_by_cost_control', 1);
+            } elseif (Schema::hasColumn($table, 'selected_offer_item_id')) {
+                $query->whereNotNull('selected_offer_item_id');
+            }
+
+            $row = $query->latest('id')->first();
+
+            if (! $row) {
+                continue;
+            }
+
+            $unitPrice =
+                $row->unit_price
+                ?? $row->price
+                ?? $row->offer_price
+                ?? $row->vendor_price
+                ?? 0;
+
+            $updates = [];
+
+            if (Schema::hasColumn($table, 'quantity')) {
+                $updates['quantity'] = $quantity;
+            } elseif (Schema::hasColumn($table, 'qty')) {
+                $updates['qty'] = $quantity;
+            }
+
+            if (Schema::hasColumn($table, 'total_price')) {
+                $updates['total_price'] = $quantity * (float) $unitPrice;
+            } elseif (Schema::hasColumn($table, 'total')) {
+                $updates['total'] = $quantity * (float) $unitPrice;
+            }
+
+            if (Schema::hasColumn($table, 'updated_at')) {
+                $updates['updated_at'] = now();
+            }
+
+            if (! empty($updates)) {
+                DB::table($table)->where('id', $row->id)->update($updates);
+            }
+
+            $this->refreshVendorOfferTotal($table, $row);
+
+            return;
+        }
+    }
+
+    private function refreshVendorOfferTotal(string $itemTable, $itemRow): void
+    {
+        if (
+            $itemTable !== 'purchase_request_vendor_offer_items'
+            || ! isset($itemRow->purchase_request_vendor_offer_id)
+            || ! Schema::hasTable('purchase_request_vendor_offers')
+            || ! Schema::hasColumn('purchase_request_vendor_offers', 'offer_total')
+        ) {
+            return;
+        }
+
+        $offerTotal = (float) DB::table('purchase_request_vendor_offer_items')
+            ->where('purchase_request_vendor_offer_id', $itemRow->purchase_request_vendor_offer_id)
+            ->sum('total_price');
+
+        $updates = ['offer_total' => $offerTotal];
+
+        if (Schema::hasColumn('purchase_request_vendor_offers', 'updated_at')) {
+            $updates['updated_at'] = now();
+        }
+
+        DB::table('purchase_request_vendor_offers')
+            ->where('id', $itemRow->purchase_request_vendor_offer_id)
+            ->update($updates);
+    }
+
     private function sendOwnerSelectionEmails(?array $result, string $remarks): void
     {
         if (empty($result)) {
@@ -507,27 +721,27 @@ class PurchaseRequestOwnerController extends Controller
 
         app(PurchasingLiteEmailService::class)->sendToRequester(
             purchaseRequest: $originalPurchaseRequest,
-            subject: 'PR Split by Owner - ' . $originalPrNumber,
-            title: 'PR Split by Owner',
-            messageText: 'Owner approved selected item(s). The remaining item(s) will stay with Owner for later approval.',
+            subject: 'PR Split by OR - ' . $originalPrNumber,
+            title: 'PR Split by OR',
+            messageText: 'OR approved selected item(s). The remaining item(s) will stay with OR for later approval.',
             buttonLabel: 'Open PR',
             buttonUrl: route('purchasing-lite.purchase-requests.show', $originalPurchaseRequest),
             remarks: $remarks !== ''
                 ? $remarks
-                : 'Selected item(s) were approved and sent as ' . $financePrNumber . '. Remaining item(s) stay with Owner.'
+                : 'Selected item(s) were approved and sent as ' . $financePrNumber . '. Remaining item(s) stay with OR.'
         );
 
         app(PurchasingLiteEmailService::class)->sendToRoles(
             purchaseRequest: $originalPurchaseRequest,
             roles: ['cost_control', 'purchasing', 'gm'],
-            subject: 'PR Split by Owner - ' . $originalPrNumber,
-            title: 'PR Split by Owner',
-            messageText: 'Owner approved selected item(s). The remaining item(s) will stay with Owner for later approval.',
+            subject: 'PR Split by OR - ' . $originalPrNumber,
+            title: 'PR Split by OR',
+            messageText: 'OR approved selected item(s). The remaining item(s) will stay with OR for later approval.',
             buttonLabel: 'Open PR List',
             buttonUrl: route('purchasing-lite.purchase-requests.meeting-list'),
             remarks: $remarks !== ''
                 ? $remarks
-                : 'Selected item(s) were approved and sent as ' . $financePrNumber . '. Remaining item(s) stay with Owner.'
+                : 'Selected item(s) were approved and sent as ' . $financePrNumber . '. Remaining item(s) stay with OR.'
         );
     }
 
@@ -538,23 +752,23 @@ class PurchaseRequestOwnerController extends Controller
         app(PurchasingLiteEmailService::class)->sendToRoles(
             purchaseRequest: $purchaseRequest,
             roles: ['financial_controller'],
-            subject: 'PR Approved by Owner - ' . $prNumber,
-            title: 'PR Approved by Owner',
-            messageText: 'Owner has approved this purchase request. Please continue the payment follow up.',
+            subject: 'PR Approved by OR - ' . $prNumber,
+            title: 'PR Approved by OR',
+            messageText: 'OR has approved this purchase request. Please continue the payment follow up.',
             buttonLabel: 'Open PR',
             buttonUrl: route('purchasing-lite.purchase-requests.show', $purchaseRequest),
-            remarks: $remarks !== '' ? $remarks : 'Approved by Owner and sent to Financial Controller.'
+            remarks: $remarks !== '' ? $remarks : 'Approved by OR and sent to Financial Controller.'
         );
 
         app(PurchasingLiteEmailService::class)->sendToRoles(
             purchaseRequest: $purchaseRequest,
             roles: ['gm'],
-            subject: 'PR Approved by Owner - ' . $prNumber,
-            title: 'PR Approved by Owner',
-            messageText: 'Owner has approved this purchase request and it has been sent to Financial Controller.',
+            subject: 'PR Approved by OR - ' . $prNumber,
+            title: 'PR Approved by OR',
+            messageText: 'OR has approved this purchase request and it has been sent to Financial Controller.',
             buttonLabel: 'Open PR List',
             buttonUrl: route('purchasing-lite.purchase-requests.meeting-list'),
-            remarks: $remarks !== '' ? $remarks : 'Approved by Owner and sent to Financial Controller.'
+            remarks: $remarks !== '' ? $remarks : 'Approved by OR and sent to Financial Controller.'
         );
     }
 

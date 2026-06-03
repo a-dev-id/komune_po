@@ -1,6 +1,6 @@
 @extends('layouts.purchasing-lite')
 
-@section('title', 'Owner Dashboard - Purchasing Lite')
+@section('title', 'OR Dashboard - Purchasing Lite')
 
 @section('content')
 @php
@@ -10,6 +10,18 @@ return 'Rp ' . number_format((float) $value, 0, ',', '.');
 
 $formatQty = function ($value) {
 return rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.');
+};
+
+$isAttachmentImage = function ($path) {
+return in_array(strtolower(pathinfo((string) $path, PATHINFO_EXTENSION)), [
+'jpg',
+'jpeg',
+'png',
+'gif',
+'webp',
+'bmp',
+'svg',
+], true);
 };
 
 $formatPriority = function ($priority) {
@@ -237,11 +249,11 @@ return null;
 
 <section class="mb-6 border border-slate-300 bg-white p-6 shadow-sm">
     <h2 class="text-xl font-bold text-slate-950">
-        Owner Dashboard
+        OR Dashboard
     </h2>
 
     <p class="mt-1 text-base text-slate-600">
-        Welcome, {{ $user->name }}.
+        Welcome, {{ strtolower((string) ($user->role ?? $user->role_name ?? '')) === 'owner' ? 'OR' : $user->name }}.
     </p>
 </section>
 
@@ -263,9 +275,15 @@ return null;
             Purchase Request List
         </h3>
 
-        <button type="submit" form="owner-bulk-approve-form" id="owner-approve-selected-button" class="inline-flex h-11 items-center justify-center bg-green-700 px-8 text-sm font-bold text-white transition hover:bg-green-800">
-            Approve Selected
-        </button>
+        <div class="flex items-center gap-3">
+            <button type="submit" form="owner-qty-save-form" id="owner-save-qty-button" class="hidden h-11 items-center justify-center border border-blue-700 bg-white px-8 text-sm font-bold text-blue-800 transition hover:bg-blue-50">
+                Save Qty
+            </button>
+
+            <button type="submit" form="owner-bulk-approve-form" id="owner-approve-selected-button" class="inline-flex h-11 items-center justify-center bg-green-700 px-8 text-sm font-bold text-white transition hover:bg-green-800">
+                Approve Selected
+            </button>
+        </div>
     </div>
 
     <div class="overflow-x-auto">
@@ -293,6 +311,10 @@ return null;
                     </th>
 
                     <th class="w-32 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">
+                        Created Date
+                    </th>
+
+                    <th class="w-32 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">
                         PR Priority
                     </th>
 
@@ -309,7 +331,7 @@ return null;
                     </th>
 
                     <th class="w-20 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">
-                        Photo
+                        File
                     </th>
 
                     <th class="min-w-[220px] align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">
@@ -322,6 +344,10 @@ return null;
 
                     <th class="w-20 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">
                         Unit
+                    </th>
+
+                    <th class="w-20 align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">
+                        Stock
                     </th>
 
                     <th class="min-w-[180px] align-middle border border-slate-300 px-2 py-2 text-center font-bold text-slate-800">
@@ -370,9 +396,12 @@ return null;
                     }
 
                     $selectedVendorItem = $getSelectedVendorItem($purchaseRequest, $item);
+                    $ownerQuantityValue = $selectedVendorItem['quantity'] ?? $item->quantity;
+                    $ownerUnitPriceValue = $selectedVendorItem['unit_price'] ?? 0;
+                    $ownerLineTotalValue = (float) $ownerQuantityValue * (float) $ownerUnitPriceValue;
                     @endphp
 
-                    <tr>
+                    <tr data-owner-pr-row data-pr-id="{{ $purchaseRequest->id }}">
                         @if ($loop->first)
                         <td rowspan="{{ $rowspan }}" class="align-middle border border-slate-300 px-2 py-3 text-center font-bold text-slate-700">
                             {{ $loop->parent->iteration }}
@@ -392,6 +421,10 @@ return null;
 
                         <td rowspan="{{ $rowspan }}" class="align-middle border border-slate-300 px-2 py-3 text-center text-slate-800">
                             {{ $purchaseRequest->date_needed ? \Carbon\Carbon::parse($purchaseRequest->date_needed)->format('d M Y') : '-' }}
+                        </td>
+
+                        <td rowspan="{{ $rowspan }}" class="align-middle border border-slate-300 px-2 py-3 text-center text-slate-800">
+                            {{ $purchaseRequest->created_at ? \Carbon\Carbon::parse($purchaseRequest->created_at)->format('d M Y') : '-' }}
                         </td>
 
                         <td rowspan="{{ $rowspan }}" class="align-middle border border-slate-300 px-2 py-3 text-center">
@@ -419,12 +452,17 @@ return null;
 
                         <td class="align-middle border border-slate-300 px-2 py-2">
                             @if (! empty($itemPhotos))
-                            <div class="flex justify-center">
+                            <div class="flex flex-wrap justify-center gap-1">
                                 @foreach ($itemPhotos as $photo)
                                 <a href="{{ asset('storage/' . ltrim($photo, '/')) }}" target="_blank" class="block">
+                                    @if ($isAttachmentImage($photo))
                                     <img src="{{ asset('storage/' . ltrim($photo, '/')) }}" alt="" class="h-12 w-12 border border-slate-300 object-cover">
+                                    @else
+                                    <span class="flex h-12 w-24 items-center border border-slate-300 bg-slate-50 px-2 text-xs font-bold text-slate-700">
+                                        {{ basename($photo) }}
+                                    </span>
+                                    @endif
                                 </a>
-                                @break
                                 @endforeach
                             </div>
                             @else
@@ -436,12 +474,32 @@ return null;
                             {{ $item->item_name }}
                         </td>
 
-                        <td class="align-middle border border-slate-300 px-2 py-3 text-right text-slate-800">
-                            {{ $formatQty($item->quantity) }}
+                        <td class="align-middle border border-slate-300 p-0">
+                            @if ($selectedVendorItem)
+                            <input
+                                type="text"
+                                name="owner_quantities[{{ $purchaseRequest->id }}][{{ $item->id }}]"
+                                value="{{ $formatQty($ownerQuantityValue) }}"
+                                inputmode="decimal"
+                                autocomplete="off"
+                                form="owner-qty-save-form"
+                                data-owner-qty-input
+                                data-pr-id="{{ $purchaseRequest->id }}"
+                                data-unit-price="{{ $ownerUnitPriceValue }}"
+                                data-saved-value="{{ $formatQty($ownerQuantityValue) }}"
+                                class="h-12 w-full border-0 bg-white px-2 text-right text-xs font-bold text-slate-950 outline-none focus:ring-2 focus:ring-blue-100"
+                            >
+                            @else
+                            <span class="block px-2 py-3 text-right text-slate-800">{{ $formatQty($item->quantity) }}</span>
+                            @endif
                         </td>
 
                         <td class="align-middle border border-slate-300 px-2 py-3 text-slate-800">
                             {{ $item->unit ?: '-' }}
+                        </td>
+
+                        <td class="align-middle border border-slate-300 px-2 py-3 text-right font-bold text-slate-950">
+                            {{ $item->stock !== null ? $formatQty($item->stock) : '-' }}
                         </td>
 
                         @if ($selectedVendorItem)
@@ -450,11 +508,11 @@ return null;
                         </td>
 
                         <td class="align-middle border border-slate-300 px-2 py-3 text-right font-bold text-slate-950">
-                            {{ $formatRupiah($selectedVendorItem['unit_price']) }}
+                            {{ $formatRupiah($ownerUnitPriceValue) }}
                         </td>
 
-                        <td class="align-middle border border-slate-300 px-2 py-3 text-right font-bold text-slate-950">
-                            {{ $formatRupiah($selectedVendorItem['total_price']) }}
+                        <td class="align-middle border border-slate-300 px-2 py-3 text-right font-bold text-slate-950" data-owner-line-total data-pr-id="{{ $purchaseRequest->id }}">
+                            {{ $formatRupiah($ownerLineTotalValue) }}
                         </td>
                         @else
                         <td colspan="3" class="align-middle border border-red-300 bg-red-50 px-2 py-3 text-center font-bold text-red-700">
@@ -463,7 +521,7 @@ return null;
                         @endif
 
                         @if ($loop->first)
-                        <td rowspan="{{ $rowspan }}" class="align-middle border border-slate-300 bg-slate-50 px-2 py-3 text-right text-base font-bold text-slate-950">
+                        <td rowspan="{{ $rowspan }}" class="align-middle border border-slate-300 bg-slate-50 px-2 py-3 text-right text-base font-bold text-slate-950" data-owner-grand-total data-pr-id="{{ $purchaseRequest->id }}">
                             {{ $formatRupiah($grandTotal) }}
                         </td>
                         @endif
@@ -491,6 +549,10 @@ return null;
                             {{ $purchaseRequest->date_needed ? \Carbon\Carbon::parse($purchaseRequest->date_needed)->format('d M Y') : '-' }}
                         </td>
 
+                        <td class="align-middle border border-slate-300 px-2 py-3 text-center text-slate-800">
+                            {{ $purchaseRequest->created_at ? \Carbon\Carbon::parse($purchaseRequest->created_at)->format('d M Y') : '-' }}
+                        </td>
+
                         <td class="align-middle border border-slate-300 px-2 py-3 text-center">
                             <span class="inline-flex min-w-[90px] items-center justify-center border px-2 py-2 text-xs font-bold uppercase leading-tight {{ $priorityBadgeClass($priority) }}">
                                 {{ $formatPriority($priority) }}
@@ -505,7 +567,7 @@ return null;
                             {{ $purchaseRequest->requester_remarks ?: '-' }}
                         </td>
 
-                        <td colspan="8" class="align-middle border border-slate-300 px-2 py-3 text-center text-slate-500">
+                        <td colspan="9" class="align-middle border border-slate-300 px-2 py-3 text-center text-slate-500">
                             No item data.
                         </td>
 
@@ -516,8 +578,8 @@ return null;
                     @endif
                     @empty
                     <tr>
-                        <td colspan="17" class="align-middle border border-slate-300 px-4 py-8 text-center text-base text-slate-500">
-                            No PR waiting for Owner approval.
+                        <td colspan="19" class="align-middle border border-slate-300 px-4 py-8 text-center text-base text-slate-500">
+                            No PR waiting for OR approval.
                         </td>
                     </tr>
                     @endforelse
@@ -528,13 +590,155 @@ return null;
 
 <form id="owner-bulk-approve-form" method="POST" action="{{ route('purchasing-lite.purchase-requests.owner.bulk-approve') }}" onsubmit="return validateOwnerBulkApprove(this);">
     @csrf
+    <div class="hidden" data-owner-approve-qty-fields></div>
     <textarea name="remarks" rows="3" class="hidden" data-owner-approve-remarks></textarea>
+</form>
+
+<form id="owner-qty-save-form" method="POST" action="{{ route('purchasing-lite.purchase-requests.owner.save-quantities') }}" onsubmit="return validateOwnerQtySave();">
+    @csrf
 </form>
 @endsection
 
 @push('scripts')
 <script>
+    function parseOwnerNumber(value) {
+        const normalized = String(value ?? '')
+            .replace(',', '.')
+            .replace(/[^0-9.]/g, '');
+
+        const number = Number.parseFloat(normalized);
+
+        return Number.isFinite(number) ? number : 0;
+    }
+
+    function formatOwnerQty(value) {
+        return String(Number(value || 0).toFixed(2)).replace(/\.?0+$/, '');
+    }
+
+    function formatOwnerRupiah(value) {
+        const number = Math.round(Number(value || 0));
+
+        return 'Rp ' + String(number).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    }
+
+    function recalculateOwnerTotals(prId = null) {
+        const selector = prId
+            ? '[data-owner-qty-input][data-pr-id="' + prId + '"]'
+            : '[data-owner-qty-input]';
+
+        document.querySelectorAll(selector).forEach(function (input) {
+            const unitPrice = parseOwnerNumber(input.getAttribute('data-unit-price'));
+            const quantity = parseOwnerNumber(input.value);
+            const row = input.closest('tr');
+            const lineTotal = row ? row.querySelector('[data-owner-line-total]') : null;
+
+            if (lineTotal) {
+                lineTotal.textContent = formatOwnerRupiah(quantity * unitPrice);
+            }
+        });
+
+        const prIds = prId
+            ? [prId]
+            : Array.from(document.querySelectorAll('[data-owner-grand-total]')).map(function (cell) {
+                return cell.getAttribute('data-pr-id');
+            });
+
+        prIds.forEach(function (currentPrId) {
+            let grandTotal = 0;
+
+            document.querySelectorAll('[data-owner-qty-input][data-pr-id="' + currentPrId + '"]').forEach(function (input) {
+                grandTotal += parseOwnerNumber(input.value) * parseOwnerNumber(input.getAttribute('data-unit-price'));
+            });
+
+            const grandTotalCell = document.querySelector('[data-owner-grand-total][data-pr-id="' + currentPrId + '"]');
+
+            if (grandTotalCell) {
+                grandTotalCell.textContent = formatOwnerRupiah(grandTotal);
+            }
+        });
+    }
+
+    function quantityIsDirty(input) {
+        return parseOwnerNumber(input.value) !== parseOwnerNumber(input.getAttribute('data-saved-value'));
+    }
+
+    function updateOwnerSaveButton() {
+        const saveButton = document.getElementById('owner-save-qty-button');
+
+        if (! saveButton) {
+            return;
+        }
+
+        const hasChanges = Array.from(document.querySelectorAll('[data-owner-qty-input]')).some(quantityIsDirty);
+
+        saveButton.classList.toggle('hidden', ! hasChanges);
+        saveButton.classList.toggle('inline-flex', hasChanges);
+    }
+
+    function syncOwnerQuantitiesToApproveForm(form) {
+        const container = form.querySelector('[data-owner-approve-qty-fields]');
+
+        if (! container) {
+            return;
+        }
+
+        container.innerHTML = '';
+
+        document.querySelectorAll('[data-owner-qty-input]').forEach(function (sourceInput) {
+            const hiddenInput = document.createElement('input');
+
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = sourceInput.name;
+            hiddenInput.value = sourceInput.value;
+
+            container.appendChild(hiddenInput);
+        });
+    }
+
+    document.addEventListener('input', function (event) {
+        const input = event.target.closest('[data-owner-qty-input]');
+
+        if (! input) {
+            return;
+        }
+
+        let quantity = parseOwnerNumber(input.value);
+
+        recalculateOwnerTotals(input.getAttribute('data-pr-id'));
+        updateOwnerSaveButton();
+    });
+
+    document.addEventListener('blur', function (event) {
+        const input = event.target.closest('[data-owner-qty-input]');
+
+        if (! input) {
+            return;
+        }
+
+        let quantity = parseOwnerNumber(input.value);
+
+        if (quantity <= 0) {
+            quantity = 1;
+        }
+
+        input.value = formatOwnerQty(quantity);
+        recalculateOwnerTotals(input.getAttribute('data-pr-id'));
+        updateOwnerSaveButton();
+    }, true);
+
+    function validateOwnerQtySave() {
+        const dirtyInputs = Array.from(document.querySelectorAll('[data-owner-qty-input]')).filter(quantityIsDirty);
+
+        if (dirtyInputs.length < 1) {
+            return false;
+        }
+
+        return confirm('Save OR quantity changes?');
+    }
+
     function validateOwnerBulkApprove(form) {
+        syncOwnerQuantitiesToApproveForm(form);
+
         const checkedBoxes = Array.from(document.querySelectorAll('[data-owner-item-checkbox]:checked'));
 
         if (checkedBoxes.length < 1) {
@@ -577,7 +781,7 @@ return null;
                 remarksInput.value = remark.trim();
             }
 
-            return confirm('Approve selected item(s)? Partial PRs will be split. Unselected items will stay on Owner dashboard.');
+            return confirm('Approve selected item(s)? Partial PRs will be split. Unselected items will stay on OR dashboard.');
         }
 
         return confirm('Approve selected item(s) and send to Financial Controller?');

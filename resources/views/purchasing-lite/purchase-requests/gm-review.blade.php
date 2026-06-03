@@ -15,8 +15,20 @@ $formatQty = function ($value) {
 return rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.');
 };
 
-$statusLabel = ucwords(str_replace('_', ' ', (string) $purchaseRequest->status));
-$currentStepLabel = ucwords(str_replace('_', ' ', (string) $purchaseRequest->current_step));
+$isAttachmentImage = function ($path) {
+return in_array(strtolower(pathinfo((string) $path, PATHINFO_EXTENSION)), [
+'jpg',
+'jpeg',
+'png',
+'gif',
+'webp',
+'bmp',
+'svg',
+], true);
+};
+
+$statusLabel = str_replace('Owner', 'OR', ucwords(str_replace('_', ' ', (string) $purchaseRequest->status)));
+$currentStepLabel = str_replace('Owner', 'OR', ucwords(str_replace('_', ' ', (string) $purchaseRequest->current_step)));
 $prNumber = $purchaseRequest->pr_number ?? $purchaseRequest->request_number ?? '-';
 
 $priority = strtolower((string) ($purchaseRequest->priority ?? 'regular'));
@@ -321,7 +333,7 @@ if ($itemsCount < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($pur
 
             <div>
                 <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
-                    Created At
+                    Created Date
                 </p>
 
                 <p class="mt-2 text-base font-bold text-slate-950">
@@ -391,7 +403,7 @@ if ($itemsCount < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($pur
                         </th>
 
                         <th class="w-40 border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
-                            Photos
+                            Files
                         </th>
 
                         <th class="min-w-[260px] border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
@@ -408,6 +420,10 @@ if ($itemsCount < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($pur
 
                         <th class="w-24 border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
                             Unit
+                        </th>
+
+                        <th class="w-24 border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
+                            Stock
                         </th>
 
                         <th class="min-w-[220px] border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
@@ -455,7 +471,13 @@ if ($itemsCount < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($pur
                                 <div class="flex flex-wrap gap-1">
                                     @foreach ($itemPhotos as $photo)
                                     <a href="{{ asset('storage/' . ltrim($photo, '/')) }}" target="_blank" class="block">
+                                        @if ($isAttachmentImage($photo))
                                         <img src="{{ asset('storage/' . ltrim($photo, '/')) }}" alt="" class="h-12 w-12 border border-slate-300 object-cover">
+                                        @else
+                                        <span class="flex h-12 w-24 items-center border border-slate-300 bg-slate-50 px-2 text-xs font-bold text-slate-700">
+                                            {{ basename($photo) }}
+                                        </span>
+                                        @endif
                                     </a>
                                     @endforeach
                                 </div>
@@ -480,6 +502,10 @@ if ($itemsCount < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($pur
                                 {{ $item->unit ?: '-' }}
                             </td>
 
+                            <td class="border border-slate-300 px-3 py-3 text-right font-bold text-slate-950">
+                                {{ $item->stock !== null ? $formatQty($item->stock) : '-' }}
+                            </td>
+
                             @if ($selectedVendorItem)
                             <td class="border border-slate-300 px-3 py-3 font-bold text-slate-950">
                                 {{ $selectedVendorItem['vendor_name'] ?? '-' }}
@@ -500,7 +526,7 @@ if ($itemsCount < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($pur
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="{{ $canSelectItems ? 10 : 9 }}" class="border border-slate-300 px-4 py-6 text-center text-base text-slate-500">
+                            <td colspan="{{ $canSelectItems ? 11 : 10 }}" class="border border-slate-300 px-4 py-6 text-center text-base text-slate-500">
                                 No item data.
                             </td>
                         </tr>
@@ -509,7 +535,7 @@ if ($itemsCount < 1) { $allItemsHaveSelectedVendor=false; } else { foreach ($pur
 
                 <tfoot>
                     <tr class="bg-slate-100">
-                        <td colspan="{{ $canSelectItems ? 9 : 8 }}" class="border border-slate-300 px-3 py-4 text-right text-base font-bold text-slate-950">
+                        <td colspan="{{ $canSelectItems ? 10 : 9 }}" class="border border-slate-300 px-3 py-4 text-right text-base font-bold text-slate-950">
                             Grand Total
                         </td>
 

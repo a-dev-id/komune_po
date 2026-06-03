@@ -15,6 +15,18 @@ $formatQty = function ($value) {
 return rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.');
 };
 
+$isAttachmentImage = function ($path) {
+return in_array(strtolower(pathinfo((string) $path, PATHINFO_EXTENSION)), [
+'jpg',
+'jpeg',
+'png',
+'gif',
+'webp',
+'bmp',
+'svg',
+], true);
+};
+
 $priority = strtolower((string) ($purchaseRequest->priority ?? 'regular'));
 
 $priorityLabel = match ($priority) {
@@ -119,7 +131,7 @@ if ($purchaseRequest->items->count() < 1) { $allItemsHaveSelectedVendor=false; }
             </h3>
         </div>
 
-        <div class="grid grid-cols-1 gap-4 p-5 md:grid-cols-5">
+        <div class="grid grid-cols-1 gap-4 p-5 md:grid-cols-6">
             <div>
                 <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
                     Requester
@@ -172,7 +184,17 @@ if ($purchaseRequest->items->count() < 1) { $allItemsHaveSelectedVendor=false; }
                 </p>
             </div>
 
-            <div class="md:col-span-5">
+            <div>
+                <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
+                    Created Date
+                </p>
+
+                <p class="mt-2 text-base font-bold text-slate-950">
+                    {{ $purchaseRequest->created_at ? \Carbon\Carbon::parse($purchaseRequest->created_at)->format('d M Y') : '-' }}
+                </p>
+            </div>
+
+            <div class="md:col-span-6">
                 <p class="text-sm font-bold uppercase tracking-wide text-slate-500">
                     Requester Remarks
                 </p>
@@ -254,7 +276,7 @@ if ($purchaseRequest->items->count() < 1) { $allItemsHaveSelectedVendor=false; }
                             </th>
 
                             <th class="w-40 border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
-                                Photos
+                                Files
                             </th>
 
                             <th class="min-w-[260px] border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
@@ -267,6 +289,10 @@ if ($purchaseRequest->items->count() < 1) { $allItemsHaveSelectedVendor=false; }
 
                             <th class="w-24 border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
                                 Unit
+                            </th>
+
+                            <th class="w-24 border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
+                                Stock
                             </th>
 
                             <th class="min-w-[520px] border border-slate-300 px-3 py-3 text-center font-bold text-slate-800">
@@ -305,7 +331,13 @@ if ($purchaseRequest->items->count() < 1) { $allItemsHaveSelectedVendor=false; }
                                     <div class="flex flex-wrap gap-1">
                                         @foreach ($itemPhotos as $photo)
                                         <a href="{{ asset('storage/' . ltrim($photo, '/')) }}" target="_blank" class="block">
+                                            @if ($isAttachmentImage($photo))
                                             <img src="{{ asset('storage/' . ltrim($photo, '/')) }}" alt="" class="h-12 w-12 border border-slate-300 object-cover">
+                                            @else
+                                            <span class="flex h-12 w-24 items-center border border-slate-300 bg-slate-50 px-2 text-xs font-bold text-slate-700">
+                                                {{ basename($photo) }}
+                                            </span>
+                                            @endif
                                         </a>
                                         @endforeach
                                     </div>
@@ -324,6 +356,10 @@ if ($purchaseRequest->items->count() < 1) { $allItemsHaveSelectedVendor=false; }
 
                                 <td class="border border-slate-300 px-3 py-3 text-slate-800">
                                     {{ $item->unit ?: '-' }}
+                                </td>
+
+                                <td class="border border-slate-300 px-3 py-3 text-right font-bold text-slate-950">
+                                    {{ $item->stock !== null ? $formatQty($item->stock) : '-' }}
                                 </td>
 
                                 <td class="border border-slate-300 px-3 py-3">
@@ -380,7 +416,7 @@ if ($purchaseRequest->items->count() < 1) { $allItemsHaveSelectedVendor=false; }
                             </tr>
                             @empty
                             <tr>
-                                <td colspan="7" class="border border-slate-300 px-4 py-6 text-center text-base text-slate-500">
+                                <td colspan="8" class="border border-slate-300 px-4 py-6 text-center text-base text-slate-500">
                                     No item data.
                                 </td>
                             </tr>

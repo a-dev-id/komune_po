@@ -49,6 +49,7 @@ class PurchaseRequest extends Model
 
         'submitted_at',
         'current_status_at',
+        'last_reminder_sent_at',
     ];
 
     protected $casts = [
@@ -69,6 +70,7 @@ class PurchaseRequest extends Model
 
         'submitted_at' => 'datetime',
         'current_status_at' => 'datetime',
+        'last_reminder_sent_at' => 'datetime',
     ];
 
     public function requester(): BelongsTo
