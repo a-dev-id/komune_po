@@ -248,6 +248,9 @@ Route::prefix('purchasing-lite')->name('purchasing-lite.')->group(function () {
     Route::post('/purchase-requests/owner/save-quantities', [PurchaseRequestOwnerController::class, 'saveQuantities'])
         ->name('purchase-requests.owner.save-quantities');
 
+    Route::post('/purchase-requests/owner/save-remarks', [PurchaseRequestOwnerController::class, 'saveRemarks'])
+        ->name('purchase-requests.owner.save-remarks');
+
     Route::get('/purchase-requests/{purchaseRequest}/owner', [PurchaseRequestOwnerController::class, 'show'])
         ->name('purchase-requests.owner.show');
 

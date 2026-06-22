@@ -189,6 +189,53 @@ class PurchaseRequestOwnerController extends Controller
             ->with('success', 'OR quantity changes have been saved.');
     }
 
+    public function saveRemarks(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'owner_requester_remarks' => ['required', 'array', 'min:1'],
+            'owner_requester_remarks.*' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        $remarksByPurchaseRequest = collect($validated['owner_requester_remarks'])
+            ->mapWithKeys(fn($remarks, $purchaseRequestId) => [(int) $purchaseRequestId => trim((string) $remarks)]);
+
+        DB::transaction(function () use ($remarksByPurchaseRequest) {
+            foreach ($remarksByPurchaseRequest as $purchaseRequestId => $remarks) {
+                $purchaseRequest = PurchaseRequest::query()
+                    ->where('id', $purchaseRequestId)
+                    ->where('current_step', 'owner')
+                    ->first();
+
+                if (! $purchaseRequest) {
+                    continue;
+                }
+
+                $oldRemarks = (string) ($purchaseRequest->requester_remarks ?? '');
+
+                if ($oldRemarks === $remarks) {
+                    continue;
+                }
+
+                $this->safeFill($purchaseRequest, [
+                    'requester_remarks' => $remarks,
+                ]);
+
+                $purchaseRequest->save();
+
+                $this->createLog($purchaseRequest, [
+                    'action' => 'owner_updated_requester_remarks',
+                    'from_status' => $purchaseRequest->status,
+                    'to_status' => $purchaseRequest->status,
+                    'remarks' => $remarks,
+                ]);
+            }
+        });
+
+        return redirect()
+            ->route('purchasing-lite.dashboard')
+            ->with('success', 'OR remarks changes have been saved.');
+    }
+
     public function returnToGm(Request $request, PurchaseRequest $purchaseRequest): RedirectResponse
     {
         $validated = $request->validate([

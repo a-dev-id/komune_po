@@ -72,9 +72,7 @@
         </main>
 
         <footer class="border-t border-slate-300 bg-white px-6 py-4 text-center text-sm font-medium text-slate-600">
-            <span class="mx-1 text-red-600" aria-hidden="true">&hearts;</span>
-            Made by Angga with a lot of pressure and too many tasks
-            <span class="mx-1 text-red-600" aria-hidden="true">&hearts;</span>
+            Nandini Jungle by Hanging Gardens &copy; {{ date('Y') }}. All rights reserved.
         </footer>
     </div>
 

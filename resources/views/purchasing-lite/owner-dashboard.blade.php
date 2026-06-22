@@ -248,13 +248,21 @@ return null;
 @endphp
 
 <section class="mb-6 border border-slate-300 bg-white p-6 shadow-sm">
-    <h2 class="text-xl font-bold text-slate-950">
-        OR Dashboard
-    </h2>
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <h2 class="text-xl font-bold text-slate-950">
+                OR Dashboard
+            </h2>
 
-    <p class="mt-1 text-base text-slate-600">
-        Welcome, {{ strtolower((string) ($user->role ?? $user->role_name ?? '')) === 'owner' ? 'OR' : $user->name }}.
-    </p>
+            <p class="mt-1 text-base text-slate-600">
+                Welcome, {{ strtolower((string) ($user->role ?? $user->role_name ?? '')) === 'owner' ? 'OR' : $user->name }}.
+            </p>
+        </div>
+
+        <a href="{{ route('purchasing-lite.purchase-requests.meeting-list') }}" class="inline-flex h-10 items-center justify-center border border-slate-950 bg-white px-6 text-sm font-bold text-slate-950 transition hover:bg-slate-100">
+            All PR List
+        </a>
+    </div>
 </section>
 
 @if ($errors->any())
@@ -276,8 +284,12 @@ return null;
         </h3>
 
         <div class="flex items-center gap-3">
+            <button type="submit" form="owner-remarks-save-form" id="owner-save-remarks-button" class="hidden h-11 items-center justify-center border border-blue-700 bg-white px-8 text-sm font-bold text-blue-800 transition hover:bg-blue-50">
+                Save Remarks
+            </button>
+
             <button type="submit" form="owner-qty-save-form" id="owner-save-qty-button" class="hidden h-11 items-center justify-center border border-blue-700 bg-white px-8 text-sm font-bold text-blue-800 transition hover:bg-blue-50">
-                Save Qty
+                Save PR
             </button>
 
             <button type="submit" form="owner-bulk-approve-form" id="owner-approve-selected-button" class="inline-flex h-11 items-center justify-center bg-green-700 px-8 text-sm font-bold text-white transition hover:bg-green-800">
@@ -437,8 +449,8 @@ return null;
                             {{ $purchaseRequest->title }}
                         </td>
 
-                        <td rowspan="{{ $rowspan }}" class="align-middle whitespace-pre-line border border-slate-300 px-2 py-3 text-slate-800">
-                            {{ $purchaseRequest->requester_remarks ?: '-' }}
+                        <td rowspan="{{ $rowspan }}" class="align-middle border border-slate-300 p-0">
+                            <textarea name="owner_requester_remarks[{{ $purchaseRequest->id }}]" rows="4" autocomplete="off" spellcheck="false" form="owner-remarks-save-form" data-owner-remarks-input class="min-h-24 w-full resize-y border-0 bg-white px-2 py-3 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-blue-100">{{ $purchaseRequest->requester_remarks }}</textarea>
                         </td>
                         @endif
 
@@ -476,19 +488,7 @@ return null;
 
                         <td class="align-middle border border-slate-300 p-0">
                             @if ($selectedVendorItem)
-                            <input
-                                type="text"
-                                name="owner_quantities[{{ $purchaseRequest->id }}][{{ $item->id }}]"
-                                value="{{ $formatQty($ownerQuantityValue) }}"
-                                inputmode="decimal"
-                                autocomplete="off"
-                                form="owner-qty-save-form"
-                                data-owner-qty-input
-                                data-pr-id="{{ $purchaseRequest->id }}"
-                                data-unit-price="{{ $ownerUnitPriceValue }}"
-                                data-saved-value="{{ $formatQty($ownerQuantityValue) }}"
-                                class="h-12 w-full border-0 bg-white px-2 text-right text-xs font-bold text-slate-950 outline-none focus:ring-2 focus:ring-blue-100"
-                            >
+                            <input type="text" name="owner_quantities[{{ $purchaseRequest->id }}][{{ $item->id }}]" value="{{ $formatQty($ownerQuantityValue) }}" inputmode="decimal" autocomplete="off" form="owner-qty-save-form" data-owner-qty-input data-pr-id="{{ $purchaseRequest->id }}" data-unit-price="{{ $ownerUnitPriceValue }}" data-saved-value="{{ $formatQty($ownerQuantityValue) }}" class="h-12 w-full border-0 bg-white px-2 text-right text-xs font-bold text-slate-950 outline-none focus:ring-2 focus:ring-blue-100">
                             @else
                             <span class="block px-2 py-3 text-right text-slate-800">{{ $formatQty($item->quantity) }}</span>
                             @endif
@@ -563,8 +563,8 @@ return null;
                             {{ $purchaseRequest->title }}
                         </td>
 
-                        <td class="align-middle border border-slate-300 px-2 py-3 text-slate-800">
-                            {{ $purchaseRequest->requester_remarks ?: '-' }}
+                        <td class="align-middle border border-slate-300 p-0">
+                            <textarea name="owner_requester_remarks[{{ $purchaseRequest->id }}]" rows="4" autocomplete="off" spellcheck="false" form="owner-remarks-save-form" data-owner-remarks-input class="min-h-24 w-full resize-y border-0 bg-white px-2 py-3 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-blue-100">{{ $purchaseRequest->requester_remarks }}</textarea>
                         </td>
 
                         <td colspan="9" class="align-middle border border-slate-300 px-2 py-3 text-center text-slate-500">
@@ -595,6 +595,10 @@ return null;
 </form>
 
 <form id="owner-qty-save-form" method="POST" action="{{ route('purchasing-lite.purchase-requests.owner.save-quantities') }}" onsubmit="return validateOwnerQtySave();">
+    @csrf
+</form>
+
+<form id="owner-remarks-save-form" method="POST" action="{{ route('purchasing-lite.purchase-requests.owner.save-remarks') }}" onsubmit="return validateOwnerRemarksSave();">
     @csrf
 </form>
 @endsection
@@ -662,6 +666,10 @@ return null;
         return parseOwnerNumber(input.value) !== parseOwnerNumber(input.getAttribute('data-saved-value'));
     }
 
+    function remarksIsDirty(input) {
+        return String(input.value ?? '') !== String(input.defaultValue ?? '');
+    }
+
     function updateOwnerSaveButton() {
         const saveButton = document.getElementById('owner-save-qty-button');
 
@@ -670,6 +678,19 @@ return null;
         }
 
         const hasChanges = Array.from(document.querySelectorAll('[data-owner-qty-input]')).some(quantityIsDirty);
+
+        saveButton.classList.toggle('hidden', ! hasChanges);
+        saveButton.classList.toggle('inline-flex', hasChanges);
+    }
+
+    function updateOwnerRemarksSaveButton() {
+        const saveButton = document.getElementById('owner-save-remarks-button');
+
+        if (! saveButton) {
+            return;
+        }
+
+        const hasChanges = Array.from(document.querySelectorAll('[data-owner-remarks-input]')).some(remarksIsDirty);
 
         saveButton.classList.toggle('hidden', ! hasChanges);
         saveButton.classList.toggle('inline-flex', hasChanges);
@@ -698,14 +719,16 @@ return null;
     document.addEventListener('input', function (event) {
         const input = event.target.closest('[data-owner-qty-input]');
 
-        if (! input) {
-            return;
+        if (input) {
+            recalculateOwnerTotals(input.getAttribute('data-pr-id'));
+            updateOwnerSaveButton();
         }
 
-        let quantity = parseOwnerNumber(input.value);
+        const remarksInput = event.target.closest('[data-owner-remarks-input]');
 
-        recalculateOwnerTotals(input.getAttribute('data-pr-id'));
-        updateOwnerSaveButton();
+        if (remarksInput) {
+            updateOwnerRemarksSaveButton();
+        }
     });
 
     document.addEventListener('blur', function (event) {
@@ -734,6 +757,16 @@ return null;
         }
 
         return confirm('Save OR quantity changes?');
+    }
+
+    function validateOwnerRemarksSave() {
+        const dirtyInputs = Array.from(document.querySelectorAll('[data-owner-remarks-input]')).filter(remarksIsDirty);
+
+        if (dirtyInputs.length < 1) {
+            return false;
+        }
+
+        return confirm('Save OR remarks changes?');
     }
 
     function validateOwnerBulkApprove(form) {
