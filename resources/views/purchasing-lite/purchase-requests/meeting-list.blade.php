@@ -32,7 +32,6 @@ $statusOptions = collect([
 'revision_to_requester_from_purchasing',
 'submitted_to_cost_control',
 'submitted_to_gm',
-'submitted_to_owner',
 'submitted_to_financial_controller',
 'on_progress',
 'waiting_payment',

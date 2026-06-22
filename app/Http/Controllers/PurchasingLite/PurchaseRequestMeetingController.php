@@ -129,7 +129,6 @@ class PurchaseRequestMeetingController extends Controller
             roles: [
                 'cost_control',
                 'purchasing',
-                'gm',
             ],
             subject: 'PR Updated from Meeting List - ' . $this->getPurchaseRequestNumber($purchaseRequest),
             title: 'PR Updated by Financial Controller',
@@ -180,8 +179,6 @@ class PurchaseRequestMeetingController extends Controller
             'cost_control_review' => 'cost_control',
 
             'submitted_to_gm' => 'gm',
-
-            'submitted_to_owner' => 'owner',
 
             'submitted_to_financial_controller',
             'on_progress',

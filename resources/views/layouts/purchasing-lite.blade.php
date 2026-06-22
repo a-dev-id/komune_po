@@ -27,11 +27,11 @@
             <div class="flex items-center justify-between px-6 py-4">
                 <a href="/purchasing-lite/dashboard" class="text-inherit no-underline">
                     <h1 class="text-lg font-bold text-slate-950">
-                        Purchasing Lite
+                        Komune PO Online
                     </h1>
 
                     <p class="mt-1 text-sm text-slate-600">
-                        Simple purchasing system for older people
+                        Online purchase order system
                     </p>
                 </a>
 
@@ -72,7 +72,7 @@
         </main>
 
         <footer class="border-t border-slate-300 bg-white px-6 py-4 text-center text-sm font-medium text-slate-600">
-            Nandini Jungle by Hanging Gardens &copy; {{ date('Y') }}. All rights reserved.
+            Komune &copy; {{ date('Y') }}. All rights reserved.
         </footer>
     </div>
 

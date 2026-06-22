@@ -16,7 +16,6 @@ class SendPurchasingLitePrReminders extends Command
         'purchasing' => ['purchasing'],
         'cost_control' => ['cost_control'],
         'gm' => ['gm'],
-        'owner' => ['owner'],
         'financial_controller' => ['financial_controller'],
     ];
 
@@ -114,7 +113,6 @@ class SendPurchasingLitePrReminders extends Command
         return match ($step) {
             'cost_control' => 'Cost Control',
             'gm' => 'GM',
-            'owner' => 'OR',
             'financial_controller' => 'Financial Controller',
             default => 'Purchasing',
         };
@@ -143,7 +141,6 @@ class SendPurchasingLitePrReminders extends Command
             'purchasing' => route('purchasing-lite.purchase-requests.vendors', $purchaseRequest),
             'cost_control' => route('purchasing-lite.purchase-requests.cost-control.show', $purchaseRequest),
             'gm' => route('purchasing-lite.purchase-requests.gm.show', $purchaseRequest),
-            'owner' => route('purchasing-lite.purchase-requests.owner.show', $purchaseRequest),
             'financial_controller' => route('purchasing-lite.financial-controller.dashboard'),
             default => route('purchasing-lite.dashboard'),
         };

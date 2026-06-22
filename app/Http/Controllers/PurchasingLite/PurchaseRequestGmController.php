@@ -89,11 +89,11 @@ class PurchaseRequestGmController extends Controller
         try {
             $fromStatus = $purchaseRequest->status;
             $fromStep = $purchaseRequest->current_step;
-            $remarks = $validated['remarks'] ?: 'Approved by General Manager and sent to OR.';
+            $remarks = $validated['remarks'] ?: 'Approved by General Manager and sent to Financial Controller.';
 
             $purchaseRequest->update([
-                'status' => 'submitted_to_owner',
-                'current_step' => 'owner',
+                'status' => 'submitted_to_financial_controller',
+                'current_step' => 'financial_controller',
                 'current_status_at' => now(),
             ]);
 
@@ -103,9 +103,9 @@ class PurchaseRequestGmController extends Controller
                 'role_name' => $user->role ?? $user->role_name ?? null,
                 'action' => 'approved_by_gm',
                 'from_status' => $fromStatus,
-                'to_status' => 'submitted_to_owner',
+                'to_status' => 'submitted_to_financial_controller',
                 'from_step' => $fromStep,
-                'to_step' => 'owner',
+                'to_step' => 'financial_controller',
                 'remarks' => $remarks,
                 'acted_at' => now(),
             ]);
@@ -114,18 +114,19 @@ class PurchaseRequestGmController extends Controller
 
             app(PurchasingLiteEmailService::class)->sendToRoles(
                 purchaseRequest: $purchaseRequest,
-                roles: ['owner'],
-                subject: 'PR Waiting for OR Approval - ' . $purchaseRequest->pr_number,
+                roles: ['financial_controller'],
+                subject: 'PR Waiting for Financial Controller Review',
                 title: 'PR Approved by GM',
-                messageText: 'General Manager has approved this purchase request. Please review it from your OR dashboard.',
-                buttonLabel: 'Open OR Dashboard',
-                buttonUrl: route('purchasing-lite.dashboard'),
-                remarks: $remarks
+                messageText: 'General Manager has approved this purchase request. Please review it from your Financial Controller dashboard.',
+                buttonLabel: 'Open Financial Controller Dashboard',
+                buttonUrl: route('purchasing-lite.financial-controller.dashboard'),
+                remarks: $remarks,
+                threadKey: 'purchasing-lite-financial-controller-review'
             );
 
             return redirect()
                 ->route('purchasing-lite.dashboard')
-                ->with('success', 'PR has been approved and sent to OR.');
+                ->with('success', 'PR has been approved and sent to Financial Controller.');
         } catch (\Throwable $e) {
             DB::rollBack();
 
@@ -344,8 +345,8 @@ class PurchaseRequestGmController extends Controller
             $remarks = $validated['remarks'] ?: 'Approved selected items by General Manager. Remaining items split to ' . $newPrNumber . '.';
 
             $purchaseRequest->update([
-                'status' => 'submitted_to_owner',
-                'current_step' => 'owner',
+                'status' => 'submitted_to_financial_controller',
+                'current_step' => 'financial_controller',
                 'current_status_at' => now(),
             ]);
 
@@ -355,9 +356,9 @@ class PurchaseRequestGmController extends Controller
                 'role_name' => $user->role ?? $user->role_name ?? null,
                 'action' => 'split_approved_by_gm',
                 'from_status' => $fromStatus,
-                'to_status' => 'submitted_to_owner',
+                'to_status' => 'submitted_to_financial_controller',
                 'from_step' => $fromStep,
-                'to_step' => 'owner',
+                'to_step' => 'financial_controller',
                 'remarks' => $remarks,
                 'acted_at' => now(),
             ]);
@@ -379,13 +380,14 @@ class PurchaseRequestGmController extends Controller
 
             app(PurchasingLiteEmailService::class)->sendToRoles(
                 purchaseRequest: $purchaseRequest,
-                roles: ['owner'],
-                subject: 'PR Waiting for OR Approval - ' . $purchaseRequest->pr_number,
+                roles: ['financial_controller'],
+                subject: 'PR Waiting for Financial Controller Review',
                 title: 'PR Partially Approved by GM',
-                messageText: 'General Manager has approved selected items from this purchase request. Please review it from your OR dashboard.',
-                buttonLabel: 'Open OR Dashboard',
-                buttonUrl: route('purchasing-lite.dashboard'),
-                remarks: $remarks
+                messageText: 'General Manager has approved selected items from this purchase request. Please review it from your Financial Controller dashboard.',
+                buttonLabel: 'Open Financial Controller Dashboard',
+                buttonUrl: route('purchasing-lite.financial-controller.dashboard'),
+                remarks: $remarks,
+                threadKey: 'purchasing-lite-financial-controller-review'
             );
 
             app(PurchasingLiteEmailService::class)->sendToRolesAndRequester(
@@ -401,13 +403,106 @@ class PurchaseRequestGmController extends Controller
 
             return redirect()
                 ->route('purchasing-lite.dashboard')
-                ->with('success', 'Selected items have been approved and sent to OR. Remaining items were split to ' . $newPrNumber . '.');
+                ->with('success', 'Selected items have been approved and sent to Financial Controller. Remaining items were split to ' . $newPrNumber . '.');
         } catch (\Throwable $e) {
             DB::rollBack();
 
             return back()
                 ->withErrors([
                     'error' => 'Failed to split and approve PR. ' . $e->getMessage(),
+                ])
+                ->withInput();
+        }
+    }
+
+    public function saveQuantities(Request $request, PurchaseRequest $purchaseRequest)
+    {
+        if (! Auth::check()) {
+            return redirect('/purchasing-lite/login');
+        }
+
+        $user = Auth::user();
+
+        if (! $this->userHasGmAccess($user)) {
+            return redirect('/purchasing-lite/dashboard')
+                ->with('error', 'Only General Manager can save PR quantities.');
+        }
+
+        if (! $this->purchaseRequestIsAtGmStep($purchaseRequest)) {
+            return redirect('/purchasing-lite/dashboard')
+                ->with('success', 'This PR is no longer waiting for General Manager review.');
+        }
+
+        $validated = $request->validate([
+            'gm_quantities' => ['required', 'array', 'min:1'],
+            'gm_quantities.*' => ['nullable', 'numeric', 'min:0.01'],
+        ]);
+
+        $purchaseRequest->load([
+            'items',
+            'vendorOffers.offerItems',
+        ]);
+
+        $gmQuantities = collect($validated['gm_quantities'])
+            ->mapWithKeys(fn($quantity, $itemId) => [(int) $itemId => (float) $quantity])
+            ->filter(fn($quantity) => $quantity > 0);
+
+        if ($gmQuantities->isEmpty()) {
+            return back()
+                ->withErrors([
+                    'gm_quantities' => 'Please enter at least one valid quantity to save.',
+                ])
+                ->withInput();
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $savedCount = 0;
+
+            foreach ($purchaseRequest->items as $item) {
+                $itemId = (int) $item->id;
+
+                if (! $gmQuantities->has($itemId)) {
+                    continue;
+                }
+
+                $quantity = (float) $gmQuantities->get($itemId);
+
+                if ((float) $item->quantity !== $quantity && $this->modelHasColumn($item, 'quantity')) {
+                    $item->quantity = $quantity;
+                    $item->save();
+                }
+
+                if ($this->updateSelectedVendorItemQuantity($purchaseRequest, $itemId, $quantity)) {
+                    $savedCount++;
+                }
+            }
+
+            PurchaseRequestLog::create([
+                'purchase_request_id' => $purchaseRequest->id,
+                'user_id' => $user->id,
+                'role_name' => $user->role ?? $user->role_name ?? null,
+                'action' => 'gm_updated_quantities',
+                'from_status' => $purchaseRequest->status,
+                'to_status' => $purchaseRequest->status,
+                'from_step' => $purchaseRequest->current_step,
+                'to_step' => $purchaseRequest->current_step,
+                'remarks' => 'GM saved PR quantity changes before approval.',
+                'acted_at' => now(),
+            ]);
+
+            DB::commit();
+
+            return redirect()
+                ->route('purchasing-lite.purchase-requests.gm.show', $purchaseRequest)
+                ->with('success', $savedCount > 0 ? 'PR quantity changes have been saved.' : 'PR quantities have been saved.');
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return back()
+                ->withErrors([
+                    'error' => 'Failed to save PR quantities. ' . $e->getMessage(),
                 ])
                 ->withInput();
         }
@@ -753,6 +848,34 @@ class PurchaseRequestGmController extends Controller
         $notes = str_replace('SELECTED_BY_COST_CONTROL', '', $notes);
 
         return trim($notes);
+    }
+
+    private function updateSelectedVendorItemQuantity(PurchaseRequest $purchaseRequest, int $itemId, float $quantity): bool
+    {
+        foreach ($purchaseRequest->vendorOffers as $vendorOffer) {
+            foreach ($vendorOffer->offerItems as $offerItem) {
+                if ((int) $offerItem->purchase_request_item_id !== $itemId) {
+                    continue;
+                }
+
+                if (! str_contains((string) $offerItem->notes, 'SELECTED_BY_COST_CONTROL')) {
+                    continue;
+                }
+
+                $offerItem->quantity = $quantity;
+                $offerItem->save();
+
+                if ($this->modelHasColumn($vendorOffer, 'offer_total')) {
+                    $vendorOffer->offer_total = $vendorOffer->offerItems()
+                        ->sum('total_price');
+                    $vendorOffer->save();
+                }
+
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function getPurchaseRequestNumber(PurchaseRequest $purchaseRequest): string

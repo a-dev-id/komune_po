@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Route;
 //     return redirect('/purchasing-lite');
 // });
 
-Route::get('/', fn() => view('app-select'))->name('app.select');
+Route::get('/', fn() => redirect('/purchasing-lite/dashboard'))->name('app.select');
 
 Route::get('/login', function () {
     return redirect('/purchasing-lite/login');
@@ -227,6 +227,9 @@ Route::prefix('purchasing-lite')->name('purchasing-lite.')->group(function () {
 
     Route::post('/purchase-requests/{purchaseRequest}/gm/split-approve', [PurchaseRequestGmController::class, 'splitApprove'])
         ->name('purchase-requests.gm.split-approve');
+
+    Route::post('/purchase-requests/{purchaseRequest}/gm/save-quantities', [PurchaseRequestGmController::class, 'saveQuantities'])
+        ->name('purchase-requests.gm.save-quantities');
 
     Route::post('/purchase-requests/{purchaseRequest}/gm/return-to-cost-control', [PurchaseRequestGmController::class, 'returnToCostControl'])
         ->name('purchase-requests.gm.return-to-cost-control');
